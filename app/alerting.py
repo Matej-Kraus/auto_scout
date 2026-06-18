@@ -42,8 +42,8 @@ def process_alerts(session: Session, diff: DiffResult) -> int:
     sent = 0
 
     candidates: list[tuple[Listing, str, int | None]] = [
-        (l, "new", None) for l in diff.new
-    ] + [(l, "price_drop", old) for (l, old) in diff.price_drops]
+        (lst, "new", None) for lst in diff.new
+    ] + [(lst, "price_drop", old) for (lst, old) in diff.price_drops]
 
     for listing, kind, old_price in candidates:
         if already_alerted(session, listing, kind):

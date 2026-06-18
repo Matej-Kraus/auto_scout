@@ -1,0 +1,42 @@
+name: hunt
+
+# Cron kazdych 30 min + moznost rucniho spusteni.
+# Pozn.: public repo se po 60 dnech neaktivity sam vypne (CLAUDE.md §8) —
+# obcas pushni commit, nebo nech bezet jiny workflow jako heartbeat.
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: hunt
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: pip install -e .
+
+      # Playwright jen kdyz chces Mobile.de (z cloud IP casto padá — viz §8).
+      # Odkomentuj nasledujici dva kroky pro zapnuti:
+      # - run: pip install -e ".[playwright]"
+      # - run: python -m playwright install --with-deps chromium
+
+      - name: Run pipeline
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          DEAL_THRESHOLD: ${{ vars.DEAL_THRESHOLD || '0.10' }}
+          NOTIFY_ENABLED: "true"
+        run: python -m app.run_once

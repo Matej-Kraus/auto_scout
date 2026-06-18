@@ -1,0 +1,8 @@
+# Pro Vercel Python serverless (api/index.py). Lokalne pouzij `pip install -e .`.
+# Drzi se jen runtime potreb read API (bez scraperu/Playwrightu).
+fastapi>=0.111
+sqlalchemy>=2.0
+pydantic>=2.7
+pydantic-settings>=2.3
+numpy>=1.26
+psycopg[binary]>=3.1

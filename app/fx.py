@@ -9,14 +9,25 @@ from pathlib import Path
 
 import httpx
 
+from app.config import settings
+
 logger = logging.getLogger(__name__)
 
 # CNB denni kurz, textovy format (radky "zeme|mena|mnozstvi|kod|kurz").
 CNB_URL = "https://www.cnb.cz/cs/financni-trhy/devizovy-trh/kurzy-devizoveho-trhu/kurzy-devizoveho-trhu/denni_kurz.txt"
 _CACHE_FILE = Path(".fx_cache.json")
-_FALLBACK_EUR_CZK = 25.0  # pouzije se kdyz CNB nedostupne
+_FALLBACK_EUR_CZK = 25.0  # posledni zachrana, kdyz neni ani cache
 
 _memory: dict[str, float] = {}
+
+
+def _read_cache() -> dict | None:
+    if not _CACHE_FILE.exists():
+        return None
+    try:
+        return json.loads(_CACHE_FILE.read_text())
+    except (json.JSONDecodeError, ValueError, OSError):
+        return None
 
 
 def _parse_cnb(text: str) -> float:
@@ -37,26 +48,26 @@ def get_eur_czk() -> float:
     if _memory.get("date") == today and "rate" in _memory:
         return _memory["rate"]
 
-    if _CACHE_FILE.exists():
-        try:
-            cached = json.loads(_CACHE_FILE.read_text())
-            if cached.get("date") == today:
-                _memory.update({"date": today, "rate": float(cached["rate"])})
-                return _memory["rate"]
-        except (json.JSONDecodeError, KeyError, ValueError):
-            pass
+    cached = _read_cache()
+    if cached and cached.get("date") == today and "rate" in cached:
+        _memory.update({"date": today, "rate": float(cached["rate"])})
+        return _memory["rate"]
 
     try:
-        resp = httpx.get(CNB_URL, timeout=10.0)
+        resp = httpx.get(CNB_URL, timeout=10.0, verify=settings.ssl_verify)
         resp.raise_for_status()
         rate = _parse_cnb(resp.text)
-    except Exception as exc:  # noqa: BLE001 — kurz neni kriticky, fallback
-        logger.warning("CNB kurz nedostupny (%s), pouzivam fallback %.2f", exc, _FALLBACK_EUR_CZK)
-        rate = _FALLBACK_EUR_CZK
-
-    _memory.update({"date": today, "rate": rate})
-    try:
-        _CACHE_FILE.write_text(json.dumps({"date": today, "rate": rate}))
-    except OSError:
-        pass
-    return rate
+        _memory.update({"date": today, "rate": rate})
+        try:
+            _CACHE_FILE.write_text(json.dumps({"date": today, "rate": rate}))
+        except OSError:
+            pass
+        return rate
+    except Exception as exc:  # noqa: BLE001 — kurz neni kriticky
+        # Radsi posledni znamy (treba i vcerejsi) kurz nez nahodne cislo.
+        if cached and "rate" in cached:
+            stale = float(cached["rate"])
+            logger.warning("CNB nedostupne (%s), pouzivam posledni kurz %.3f", exc, stale)
+            return stale
+        logger.warning("CNB nedostupne (%s), bez cache → fallback %.2f", exc, _FALLBACK_EUR_CZK)
+        return _FALLBACK_EUR_CZK

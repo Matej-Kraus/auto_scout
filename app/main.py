@@ -13,11 +13,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import select
+from sqlalchemy import func, select
 
-from app.api_schemas import ListingDetailOut, ListingOut, PricePoint
+from app.api_schemas import ListingDetailOut, ListingOut, PricePoint, StatusOut
 from app.db import SessionLocal, init_db
-from app.models import Listing
+from app.models import Alert, Listing
 from app.scoring.engine import score_listing
 
 logger = logging.getLogger(__name__)
@@ -128,6 +128,35 @@ def get_listing(listing_id: int) -> ListingDetailOut:
 def list_models() -> list[str]:
     with SessionLocal() as session:
         return [m for (m,) in session.execute(select(Listing.model).distinct()).all()]
+
+
+@app.get("/api/status", response_model=StatusOut)
+def status() -> StatusOut:
+    """Zdravi systemu: kdy naposledy bezelo, kolik je aktivnich, kolik hot dealu."""
+    with SessionLocal() as session:
+        active = list(session.scalars(select(Listing).where(Listing.is_active.is_(True))).all())
+        scores = _score_all(active)
+
+        by_model: dict[str, int] = defaultdict(int)
+        hot = 0
+        for lst in active:
+            by_model[lst.model] += 1
+            sc = scores.get(lst.id)
+            if sc and sc.is_alertable and sc.value >= 0.18:
+                hot += 1
+
+        last_run = session.scalar(select(func.max(Listing.last_seen)))
+        last_alert = session.scalar(select(func.max(Alert.sent_at)))
+        total = session.scalar(select(func.count(Listing.id))) or 0
+
+    return StatusOut(
+        last_run=last_run,
+        last_alert=last_alert,
+        total_listings=total,
+        active_listings=len(active),
+        hot_deals=hot,
+        by_model=dict(by_model),
+    )
 
 
 @app.post("/api/run")

@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.dedup import find_db_duplicate, same_car
 from app.models import Listing
 from app.notify.telegram import format_alert, send_message
 from app.pipeline import DiffResult, already_alerted, record_alert
@@ -45,9 +46,20 @@ def process_alerts(session: Session, diff: DiffResult) -> int:
         (lst, "new", None) for lst in diff.new
     ] + [(lst, "price_drop", old) for (lst, old) in diff.price_drops]
 
+    alerted_new: list[Listing] = []  # vozy uz alertovane v tomhle behu (cross-portal)
+
     for listing, kind, old_price in candidates:
         if already_alerted(session, listing, kind):
             continue
+
+        # Cross-portal dedup: stejne auto na vic portalech → alertuj jen jednou.
+        if kind == "new":
+            if any(same_car(listing, prev) for prev in alerted_new):
+                continue
+            dup = find_db_duplicate(session, listing)
+            if dup is not None and already_alerted(session, dup, "new"):
+                logger.info("preskakuji dup %s (uz alertovano z %s)", listing.source_id, dup.source)
+                continue
 
         score = score_listing(listing, _samples_for(session, listing))
         if not _should_alert(score, listing, kind):
@@ -56,6 +68,8 @@ def process_alerts(session: Session, diff: DiffResult) -> int:
         text = format_alert(listing, score, kind, old_price)
         send_message(text)  # dry-run kdyz NOTIFY_ENABLED=false
         record_alert(session, listing, kind, score.value)
+        if kind == "new":
+            alerted_new.append(listing)
         sent += 1
 
     session.flush()

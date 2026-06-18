@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchListings } from "./api";
+import { fetchListings, fetchStatus } from "./api";
 import { Drawer } from "./Drawer";
 import {
   czk,
@@ -12,12 +12,13 @@ import {
   timeAgo,
   transmissionLabel,
 } from "./format";
-import type { Listing } from "./types";
+import type { Listing, Status } from "./types";
 
 const MODELS = ["bmw_130i", "audi_s3", "golf_gti"];
 
 export function App() {
   const [listings, setListings] = useState<Listing[] | null>(null);
+  const [status, setStatus] = useState<Status | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<string | null>(null);
   const [openId, setOpenId] = useState<number | null>(null);
@@ -29,6 +30,10 @@ export function App() {
       .then(setListings)
       .catch((e) => setError(String(e)));
   }, [filter]);
+
+  useEffect(() => {
+    fetchStatus().then(setStatus).catch(() => {});
+  }, []);
 
   const hero = useMemo(
     () => listings?.find((l) => l.deal_score != null) ?? null,
@@ -61,7 +66,9 @@ export function App() {
               <b>{listings.length}</b> aktivních ·{" "}
               <b style={{ color: "var(--hot)" }}>{hotCount}</b> hot
               <br />
-              hlídám: 130i · S3 · GTI
+              {status?.last_run
+                ? `naposledy ${timeAgo(status.last_run)}`
+                : "hlídám: 130i · S3 · GTI"}
             </>
           )}
         </div>

@@ -37,3 +37,12 @@ class PricePoint(BaseModel):
 
 class ListingDetailOut(ListingOut):
     price_history: list[PricePoint] = []
+
+
+class StatusOut(BaseModel):
+    last_run: datetime | None  # ~ max(last_seen): kdy pipeline naposledy nesto videla
+    last_alert: datetime | None
+    total_listings: int
+    active_listings: int
+    hot_deals: int  # aktivni s deal skore >= 0.18
+    by_model: dict[str, int]  # pocet aktivnich na model

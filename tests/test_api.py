@@ -86,3 +86,12 @@ def test_models_endpoint(client):
 def test_filter_by_model(client):
     data = client.get("/api/listings?model=bmw_130i").json()
     assert data == []
+
+
+def test_status_endpoint(client):
+    st = client.get("/api/status").json()
+    assert st["total_listings"] == 10
+    assert st["active_listings"] == 10
+    assert st["by_model"] == {"audi_s3": 10}
+    assert st["last_run"] is not None
+    assert st["hot_deals"] >= 1  # nejlevnejsi je vyrazne pod trhem

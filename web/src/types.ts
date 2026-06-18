@@ -28,3 +28,12 @@ export interface PricePoint {
 export interface ListingDetail extends Listing {
   price_history: PricePoint[];
 }
+
+export interface Status {
+  last_run: string | null;
+  last_alert: string | null;
+  total_listings: number;
+  active_listings: number;
+  hot_deals: number;
+  by_model: Record<string, number>;
+}

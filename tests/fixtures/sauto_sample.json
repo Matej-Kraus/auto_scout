@@ -1,0 +1,35 @@
+{
+  "pagination": { "limit": 100, "offset": 0, "total": 3 },
+  "results": [
+    {
+      "id": 210453992,
+      "name": "BMW Řada 1, 130i 195kW manuál sport",
+      "price": 215000,
+      "manufacturer_cb": { "name": "BMW", "seo_name": "bmw", "value": 5 },
+      "model_cb": { "name": "Řada 1", "seo_name": "rada-1", "value": 300 },
+      "manufacturing_date": "2011-03-01",
+      "tachometer": 140000,
+      "gearbox_cb": { "name": "Manuální", "seo_name": "manualni", "value": 1 }
+    },
+    {
+      "id": 999111,
+      "name": "Ford Focus 1.6 92kW",
+      "price": 174990,
+      "manufacturer_cb": { "name": "Ford", "seo_name": "ford", "value": 24 },
+      "model_cb": { "name": "Focus", "seo_name": "focus", "value": 197 },
+      "manufacturing_date": "2011-03-01",
+      "tachometer": 134841,
+      "gearbox_cb": { "name": "Manuální", "seo_name": "manualni", "value": 1 }
+    },
+    {
+      "id": 222333,
+      "name": "BMW Řada 1, 116i 90kW",
+      "price": 120000,
+      "manufacturer_cb": { "name": "BMW", "seo_name": "bmw", "value": 5 },
+      "model_cb": { "name": "Řada 1", "seo_name": "rada-1", "value": 300 },
+      "manufacturing_date": "2009-06-01",
+      "tachometer": 180000,
+      "gearbox_cb": { "name": "Manuální", "seo_name": "manualni", "value": 1 }
+    }
+  ]
+}

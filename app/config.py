@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     telegram_chat_id: str = ""
     deal_threshold: float = 0.10
     notify_enabled: bool = False
+    # Lokalne za firemni TLS proxy nastav SSL_VERIFY=false (jinak nech true).
+    ssl_verify: bool = True
+    # Retence: PriceHistory starsi nez tolik dni se prune (krome posledniho zaznamu).
+    retention_days: int = 120
 
     model_config = SettingsConfigDict(
         env_file=".env",

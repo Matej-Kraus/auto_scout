@@ -27,10 +27,12 @@ class DiffResult:
 
     new: list[Listing] = field(default_factory=list)
     price_drops: list[tuple[Listing, int]] = field(default_factory=list)  # (listing, stara_cena)
+    failures: list[tuple[str, str, str]] = field(default_factory=list)  # (scraper, watch, chyba)
 
     @property
     def summary(self) -> str:
-        return f"{len(self.new)} novych, {len(self.price_drops)} zlevneni"
+        base = f"{len(self.new)} novych, {len(self.price_drops)} zlevneni"
+        return base + (f", {len(self.failures)} chyb scraperu" if self.failures else "")
 
 
 def run_pipeline(
@@ -46,8 +48,9 @@ def run_pipeline(
             query = SearchQuery.from_watch(watch, scraper.name)
             try:
                 raws = scraper.fetch_listings(query)
-            except Exception:  # noqa: BLE001 — jeden zdroj selze, ostatni jedou (CLAUDE.md §8)
+            except Exception as exc:  # noqa: BLE001 — jeden zdroj selze, ostatni jedou (CLAUDE.md §8)
                 logger.exception("scraper %s spadl pro watch %s", scraper.name, watch.key)
+                diff.failures.append((scraper.name, watch.key, str(exc)[:200]))
                 continue
 
             for raw in raws:

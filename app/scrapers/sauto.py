@@ -14,6 +14,7 @@ import time
 
 import httpx
 
+from app.config import settings
 from app.scrapers.base import RawListing, Scraper, SearchQuery
 
 logger = logging.getLogger(__name__)
@@ -39,7 +40,9 @@ class SautoScraper(Scraper):
     name = "sauto"
 
     def __init__(self, client: httpx.Client | None = None) -> None:
-        self._client = client or httpx.Client(headers=_HEADERS, timeout=20.0)
+        self._client = client or httpx.Client(
+            headers=_HEADERS, timeout=20.0, verify=settings.ssl_verify
+        )
         self._owns_client = client is None
 
     def fetch_listings(self, query: SearchQuery) -> list[RawListing]:

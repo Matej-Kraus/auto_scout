@@ -52,6 +52,19 @@ pytest
 Lokálně se používá **SQLite** (`local.db`). Telegram je ve výchozím stavu
 **dry-run** (`NOTIFY_ENABLED=false`) — alerty se jen logují, nic se neposílá.
 
+### Užitečné scripty
+
+```bash
+# Naplní DB demo daty → uvidíš dashboard hned, bez scrapování/Neonu:
+python -m scripts.seed_demo
+
+# Vytáhne tvůj Telegram chat_id (nejdřív napiš botovi v Telegramu):
+python -m scripts.telegram_chatid          # token z .env, nebo předej argumentem
+```
+
+> Za firemní TLS proxy, která láme SSL, nastav v `.env` `SSL_VERIFY=false`
+> (v produkci nech `true`).
+
 ### Mobile.de (volitelné)
 
 ```bash

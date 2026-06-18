@@ -7,9 +7,10 @@ from __future__ import annotations
 
 import logging
 
-from app.alerting import process_alerts
+from app.alerting import notify_failures, process_alerts
 from app.config import WATCHES
 from app.db import init_db, session_scope
+from app.retention import prune_price_history
 from app.scrapers.sauto import SautoScraper
 
 logging.basicConfig(
@@ -47,7 +48,9 @@ def main() -> None:
     with session_scope() as session:
         diff = run_pipeline(session, WATCHES, scrapers)
         sent = process_alerts(session, diff)
+        prune_price_history(session)
 
+    notify_failures(diff)
     logger.info("Hotovo: %s, alertu %d", diff.summary, sent)
 
 

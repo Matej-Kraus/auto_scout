@@ -61,3 +61,13 @@ def process_alerts(session: Session, diff: DiffResult) -> int:
     session.flush()
     logger.info("alerting: odeslano %d alertu", sent)
     return sent
+
+
+def notify_failures(diff: DiffResult) -> None:
+    """Posle Telegram upozorneni, kdyz se nejaky scraper rozbil (CLAUDE.md §8.5)."""
+    if not diff.failures:
+        return
+    lines = ["⚠️ *Scraper se rozbil*"]
+    for scraper, watch, err in diff.failures:
+        lines.append(f"• `{scraper}` @ {watch}\n  {err}")
+    send_message("\n".join(lines))

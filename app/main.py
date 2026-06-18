@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,7 +22,14 @@ from app.scoring.engine import score_listing
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Car Deal Hunter", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    init_db()
+    yield
+
+
+app = FastAPI(title="Car Deal Hunter", version="0.1.0", lifespan=lifespan)
 
 # Dashboard (Vite dev / Vercel) musi smet cist API.
 app.add_middleware(
@@ -30,11 +38,6 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
-
-
-@app.on_event("startup")
-def _startup() -> None:
-    init_db()
 
 
 def _score_all(listings: list[Listing]) -> dict[int, "object"]:

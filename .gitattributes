@@ -1,0 +1,7 @@
+# Konzistentni LF radkovani napric OS (potlaci CRLF varovani na Windows).
+* text=auto eol=lf
+
+# Binarni soubory neupravovat.
+*.png binary
+*.jpg binary
+*.ico binary

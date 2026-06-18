@@ -51,6 +51,15 @@ class Watch:
 #   name_includes  — vsechny tyto substringy musi byt v nazvu (client-side, kvuli generaci/motoru)
 #   year_from/to   — rocnikovy filtr (client-side)
 #   price_from/to  — server-side cenovy filtr (zuzi objem stahovani)
+#
+# DE portaly (autoscout24, mobilede) jsou ve vychozim stavu vypnute — vyzaduji
+# interni ID portalu, ktere je potreba overit z realne site (Cloudflare blokuje
+# cloud IP). Zapnes je tak, ze do portal_params doplnis klic "autoscout24"
+# resp. "mobilede". Priklad pro Audi S3 (overene AS24 ID make=9, model=15637):
+#     "autoscout24": {"make": 9, "model": 15637, "name_includes": ["s3"],
+#                      "year_from": 2006, "year_to": 2013},
+#     "mobilede": {"make_model": "1900_24", "name_includes": ["s3"],
+#                   "year_from": 2006, "year_to": 2013},
 WATCHES: list[Watch] = [
     Watch(
         model="bmw_130i",

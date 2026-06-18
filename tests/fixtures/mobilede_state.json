@@ -1,0 +1,26 @@
+{
+  "search": {
+    "srp": {
+      "items": [
+        {
+          "id": 900111,
+          "title": "BMW 130i M-Paket",
+          "relativeUrl": "/fahrzeuge/details.html?id=900111",
+          "mileage": 138000,
+          "firstRegistration": "05-2008",
+          "transmission": "MANUAL_GEAR",
+          "price": { "gross": 11900 }
+        },
+        {
+          "id": 900222,
+          "title": "BMW 118d",
+          "relativeUrl": "/fahrzeuge/details.html?id=900222",
+          "mileage": 190000,
+          "firstRegistration": "01-2010",
+          "transmission": "MANUAL_GEAR",
+          "price": { "gross": 6500 }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "listings": [
+    {
+      "id": "abc-123",
+      "url": "/inzerat/audi-s3-abc-123",
+      "vehicle": {
+        "make": "Audi",
+        "model": "S3",
+        "modelVersionInput": "2.0 TFSI quattro",
+        "mileageInKmRaw": 145000,
+        "firstRegistrationDateRaw": "06-2010",
+        "transmissionType": "Manual"
+      },
+      "price": { "priceRaw": 14900 }
+    },
+    {
+      "id": "def-456",
+      "url": "/inzerat/audi-a3-def-456",
+      "vehicle": {
+        "make": "Audi",
+        "model": "A3",
+        "modelVersionInput": "1.6 TDI",
+        "mileageInKmRaw": 160000,
+        "firstRegistrationDateRaw": "03-2011",
+        "transmissionType": "Manual"
+      },
+      "price": { "priceRaw": 9900 }
+    }
+  ]
+}

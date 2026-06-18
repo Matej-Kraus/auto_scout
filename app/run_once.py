@@ -20,15 +20,21 @@ logger = logging.getLogger("run_once")
 
 
 def build_scrapers() -> list:
-    """Aktivni scrapery. Dalsi portaly se pridaji sem (autoscout24, mobilede)."""
+    """Aktivni scrapery. DE portaly jsou volitelne (sit/Cloudflare/Playwright);
+    bez portal_params se uvnitr proste preskoci."""
     scrapers = [SautoScraper()]
-    # AutoScout24 a Mobile.de jsou volitelne (sit/Cloudflare) — pridej dle potreby:
     try:
         from app.scrapers.autoscout24 import AutoScout24Scraper
 
         scrapers.append(AutoScout24Scraper())
     except Exception:  # noqa: BLE001
         logger.warning("AutoScout24 scraper se nenacetl, preskakuji", exc_info=True)
+    try:
+        from app.scrapers.mobilede import MobileDeScraper
+
+        scrapers.append(MobileDeScraper())
+    except Exception:  # noqa: BLE001
+        logger.warning("Mobile.de scraper se nenacetl, preskakuji", exc_info=True)
     return scrapers
 
 

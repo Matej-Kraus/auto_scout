@@ -98,4 +98,5 @@ def normalize(raw: RawListing, model: str, generation: str) -> dict:
         "currency": raw.currency.upper(),
         "url": raw.url,
         "title": raw.title,
+        "image_url": raw.image_url,
     }

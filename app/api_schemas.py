@@ -20,6 +20,7 @@ class ListingOut(BaseModel):
     currency: str
     url: str
     title: str
+    image_url: str | None = None
     first_seen: datetime
     last_seen: datetime
     is_active: bool

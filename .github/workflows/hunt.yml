@@ -5,7 +5,7 @@ name: hunt
 # obcas pushni commit, nebo nech bezet jiny workflow jako heartbeat.
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "0 * * * *"   # kazdou celou hodinu
   workflow_dispatch:
 
 concurrency:
@@ -35,8 +35,17 @@ jobs:
       - name: Run pipeline
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          # Telegram (volitelne) — necht prazdne, pokud nepouzivas
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          NOTIFY_ENABLED: ${{ vars.NOTIFY_ENABLED || 'false' }}
+          # Email notifikace (zdarma napr. Gmail App password)
+          EMAIL_ENABLED: ${{ vars.EMAIL_ENABLED || 'true' }}
+          SMTP_HOST: ${{ vars.SMTP_HOST || 'smtp.gmail.com' }}
+          SMTP_PORT: ${{ vars.SMTP_PORT || '587' }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          EMAIL_FROM: ${{ secrets.SMTP_USER }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
           DEAL_THRESHOLD: ${{ vars.DEAL_THRESHOLD || '0.10' }}
-          NOTIFY_ENABLED: "true"
         run: python -m app.run_once

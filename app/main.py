@@ -67,6 +67,7 @@ def _to_out(lst: Listing, score) -> ListingOut:
         currency=lst.currency,
         url=lst.url,
         title=lst.title,
+        image_url=lst.image_url,
         first_seen=lst.first_seen,
         last_seen=lst.last_seen,
         is_active=lst.is_active,

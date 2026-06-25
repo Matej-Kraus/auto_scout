@@ -126,6 +126,7 @@ class SautoScraper(Scraper):
             mileage_km=item.get("tachometer"),
             transmission_text=gearbox,
             drivetrain_text=name,  # pohon Sauto v zakladu nedava → odvodi se z nazvu/modelu
+            image_url=_first_image(item),
             raw=item,
         )
 
@@ -141,6 +142,19 @@ def _year_from_date(date_str: str | None) -> int | None:
         return int(date_str[:4])
     except ValueError:
         return None
+
+
+def _first_image(item: dict) -> str | None:
+    """Prvni nahledova fotka. Sauto vraci relativni '//d19-a.sdn.cz/...' → doplnime https:."""
+    images = item.get("images") or []
+    if not images:
+        return None
+    url = (images[0] or {}).get("url")
+    if not url:
+        return None
+    if url.startswith("//"):
+        return "https:" + url
+    return url
 
 
 def _detail_url(item: dict) -> str:

@@ -46,6 +46,7 @@ class Listing(Base):
 
     url: Mapped[str] = mapped_column(String(512))
     title: Mapped[str] = mapped_column(String(256))
+    image_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

@@ -25,6 +25,12 @@ def build_scrapers() -> list:
     bez portal_params se uvnitr proste preskoci."""
     scrapers = [SautoScraper()]
     try:
+        from app.scrapers.sbazar import SbazarScraper
+
+        scrapers.append(SbazarScraper())
+    except Exception:  # noqa: BLE001
+        logger.warning("Sbazar scraper se nenacetl, preskakuji", exc_info=True)
+    try:
         from app.scrapers.autoscout24 import AutoScout24Scraper
 
         scrapers.append(AutoScout24Scraper())

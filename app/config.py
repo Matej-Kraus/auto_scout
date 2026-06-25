@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,6 +16,17 @@ class Settings(BaseSettings):
     telegram_chat_id: str = ""
     deal_threshold: float = 0.10
     notify_enabled: bool = False
+
+    # Email notifikace (SMTP). Zdarma napr. pres Gmail: smtp.gmail.com:587 +
+    # "App password" (ucet -> Security -> App passwords). email_to muze byt vic
+    # adres oddelenych carkou.
+    email_enabled: bool = False
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    email_from: str = ""  # default = smtp_user
+    email_to: str = ""
     # Lokalne za firemni TLS proxy nastav SSL_VERIFY=false (jinak nech true).
     ssl_verify: bool = True
     # Retence: PriceHistory starsi nez tolik dni se prune (krome posledniho zaznamu).
@@ -25,6 +37,16 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def _empty_db_url_to_sqlite(cls, v: object) -> object:
+        # GitHub Actions dosadi za nenastaveny `${{ secrets.DATABASE_URL }}`
+        # prazdny string, ktery by jinak prebil default a shodil create_engine("").
+        # Prazdne / jen-bile-znaky => fallback na lokalni SQLite.
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return "sqlite:///local.db"
+        return v
 
 
 settings = Settings()
@@ -77,7 +99,16 @@ WATCHES: list[Watch] = [
                 "year_to": 2013,
                 "price_from": 100_000,
                 "price_to": 450_000,
-            }
+            },
+            "sbazar": {
+                "phrase": "bmw 130i",
+                "require_year": True,
+                "name_includes": ["130i"],
+                "year_from": 2005,
+                "year_to": 2013,
+                "price_from": 100_000,
+                "price_to": 450_000,
+            },
         },
     ),
     Watch(
@@ -92,7 +123,16 @@ WATCHES: list[Watch] = [
                 "year_to": 2013,
                 "price_from": 100_000,
                 "price_to": 450_000,
-            }
+            },
+            "sbazar": {
+                "phrase": "audi s3",
+                "require_year": True,
+                "name_includes": ["s3"],
+                "year_from": 2006,
+                "year_to": 2013,
+                "price_from": 100_000,
+                "price_to": 450_000,
+            },
         },
     ),
     Watch(
@@ -107,7 +147,16 @@ WATCHES: list[Watch] = [
                 "year_to": 2020,
                 "price_from": 150_000,
                 "price_to": 450_000,
-            }
+            },
+            "sbazar": {
+                "phrase": "golf gti",
+                "require_year": True,
+                "name_includes": ["golf", "gti"],
+                "year_from": 2012,
+                "year_to": 2020,
+                "price_from": 150_000,
+                "price_to": 450_000,
+            },
         },
     ),
 ]

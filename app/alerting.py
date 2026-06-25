@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.dedup import find_db_duplicate, same_car
 from app.models import Listing
-from app.notify.telegram import format_alert, send_message
+from app.notify import dispatch_alert, dispatch_text
 from app.pipeline import DiffResult, already_alerted, record_alert
 from app.scoring.engine import DealScore, in_budget, score_listing
 
@@ -65,8 +65,7 @@ def process_alerts(session: Session, diff: DiffResult) -> int:
         if not _should_alert(score, listing, kind):
             continue
 
-        text = format_alert(listing, score, kind, old_price)
-        send_message(text)  # dry-run kdyz NOTIFY_ENABLED=false
+        dispatch_alert(listing, score, kind, old_price)  # Telegram + Email (dle env)
         record_alert(session, listing, kind, score.value)
         if kind == "new":
             alerted_new.append(listing)
@@ -84,4 +83,4 @@ def notify_failures(diff: DiffResult) -> None:
     lines = ["⚠️ *Scraper se rozbil*"]
     for scraper, watch, err in diff.failures:
         lines.append(f"• `{scraper}` @ {watch}\n  {err}")
-    send_message("\n".join(lines))
+    dispatch_text("\n".join(lines), subject="⚠️ Car Deal Hunter — scraper se rozbil")

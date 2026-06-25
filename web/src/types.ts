@@ -11,6 +11,7 @@ export interface Listing {
   currency: string;
   url: string;
   title: string;
+  image_url: string | null;
   first_seen: string;
   last_seen: string;
   is_active: boolean;

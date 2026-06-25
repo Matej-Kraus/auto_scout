@@ -21,7 +21,8 @@ export const transmissionLabel = (t: string | null) =>
 export const drivetrainLabel = (d: string | null) => (d ? d.toUpperCase() : "—");
 
 export const sourceLabel = (s: string) =>
-  ({ sauto: "SAUTO", autoscout24: "AS24", mobilede: "MOBILE.DE" })[s] ?? s.toUpperCase();
+  ({ sauto: "SAUTO", sbazar: "SBAZAR", autoscout24: "AS24", mobilede: "MOBILE.DE" })[s] ??
+  s.toUpperCase();
 
 // Barva podle kvality dealu (deal_score)
 export function dealTier(score: number | null): "hot" | "good" | "fair" | "none" {

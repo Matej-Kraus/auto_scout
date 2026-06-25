@@ -12,9 +12,11 @@ import {
   timeAgo,
   transmissionLabel,
 } from "./format";
+import { applySearch, EMPTY_SEARCH, type SearchState } from "./search";
 import type { Listing, Status } from "./types";
 
 const MODELS = ["bmw_130i", "audi_s3", "golf_gti"];
+const PRICE_STEPS = [200_000, 250_000, 300_000, 400_000];
 
 export function App() {
   const [listings, setListings] = useState<Listing[] | null>(null);
@@ -22,6 +24,7 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<string | null>(null);
   const [openId, setOpenId] = useState<number | null>(null);
+  const [search, setSearch] = useState<SearchState>(EMPTY_SEARCH);
 
   useEffect(() => {
     setListings(null);
@@ -35,16 +38,30 @@ export function App() {
     fetchStatus().then(setStatus).catch(() => {});
   }, []);
 
-  const hero = useMemo(
-    () => listings?.find((l) => l.deal_score != null) ?? null,
+  // Zdroje pro filtr (dynamicky z dat).
+  const sources = useMemo(
+    () => Array.from(new Set((listings ?? []).map((l) => l.source))).sort(),
     [listings],
   );
-  const rest = useMemo(
-    () => (hero ? listings?.filter((l) => l.id !== hero.id) ?? [] : listings ?? []),
-    [listings, hero],
+
+  // Vyhledávání + filtry běží client-side nad staženými inzeráty (okamžitá odezva).
+  const matched = useMemo(
+    () => (listings ? applySearch(listings, search) : null),
+    [listings, search],
   );
 
-  const hotCount = listings?.filter((l) => dealTier(l.deal_score) === "hot").length ?? 0;
+  const hero = useMemo(
+    () => matched?.find((l) => l.deal_score != null) ?? null,
+    [matched],
+  );
+  const rest = useMemo(
+    () => (hero ? matched?.filter((l) => l.id !== hero.id) ?? [] : matched ?? []),
+    [matched, hero],
+  );
+
+  const hotCount = matched?.filter((l) => dealTier(l.deal_score) === "hot").length ?? 0;
+  const searchActive =
+    search.query.trim() !== "" || search.manualOnly || search.maxPrice != null || search.source != null;
 
   return (
     <div className="shell">
@@ -59,11 +76,11 @@ export function App() {
           </div>
         </div>
         <div className="readout">
-          {listings == null ? (
+          {matched == null ? (
             "SCAN…"
           ) : (
             <>
-              <b>{listings.length}</b> aktivních ·{" "}
+              <b>{matched.length}</b> nalezeno ·{" "}
               <b style={{ color: "var(--hot)" }}>{hotCount}</b> hot
               <br />
               {status?.last_run
@@ -73,6 +90,21 @@ export function App() {
           )}
         </div>
       </header>
+
+      <div className="searchbar">
+        <span className="search-ico">⌕</span>
+        <input
+          className="search-input"
+          placeholder="Hledej: golf gti 2013 manual…"
+          value={search.query}
+          onChange={(e) => setSearch((s) => ({ ...s, query: e.target.value }))}
+        />
+        {searchActive && (
+          <button className="search-clear" onClick={() => setSearch(EMPTY_SEARCH)}>
+            ✕ zrušit
+          </button>
+        )}
+      </div>
 
       <div className="controls">
         <span className="lbl">Garáž</span>
@@ -93,6 +125,39 @@ export function App() {
         ))}
       </div>
 
+      <div className="controls">
+        <span className="lbl">Filtr</span>
+        <button
+          className={`pill ${search.manualOnly ? "active" : ""}`}
+          onClick={() => setSearch((s) => ({ ...s, manualOnly: !s.manualOnly }))}
+        >
+          Jen manuál
+        </button>
+        {PRICE_STEPS.map((p) => (
+          <button
+            key={p}
+            className={`pill ${search.maxPrice === p ? "active" : ""}`}
+            onClick={() =>
+              setSearch((s) => ({ ...s, maxPrice: s.maxPrice === p ? null : p }))
+            }
+          >
+            do {Math.round(p / 1000)}k
+          </button>
+        ))}
+        {sources.length > 1 &&
+          sources.map((src) => (
+            <button
+              key={src}
+              className={`pill ${search.source === src ? "active" : ""}`}
+              onClick={() =>
+                setSearch((s) => ({ ...s, source: s.source === src ? null : src }))
+              }
+            >
+              {sourceLabel(src)}
+            </button>
+          ))}
+      </div>
+
       {error && <div className="state">CHYBA: {error}. Běží FastAPI na :8000?</div>}
 
       {!error && listings == null && (
@@ -102,11 +167,21 @@ export function App() {
         </div>
       )}
 
-      {!error && listings != null && listings.length === 0 && (
+      {!error && matched != null && matched.length === 0 && (
         <div className="state">
-          ŽÁDNÉ AKTIVNÍ INZERÁTY.
-          <br />
-          Spusť pipeline: <code>python -m app.run_once</code>
+          {listings && listings.length > 0 ? (
+            <>
+              ŽÁDNÝ INZERÁT NEODPOVÍDÁ HLEDÁNÍ.
+              <br />
+              Zkus volnější dotaz nebo zruš filtry.
+            </>
+          ) : (
+            <>
+              ŽÁDNÉ AKTIVNÍ INZERÁTY.
+              <br />
+              Spusť pipeline: <code>python -m app.run_once</code>
+            </>
+          )}
         </div>
       )}
 
@@ -114,10 +189,10 @@ export function App() {
         <HeroCard listing={hero} onOpen={() => setOpenId(hero.id)} />
       )}
 
-      {listings != null && listings.length > 0 && (
+      {matched != null && matched.length > 0 && (
         <>
           <div className="section-head">
-            <h3>Žebříček dealů</h3>
+            <h3>{searchActive ? "Výsledky hledání" : "Žebříček dealů"}</h3>
             <span className="count">SEŘAZENO DLE SKÓRE ▾</span>
           </div>
           <div className="grid">
@@ -176,6 +251,9 @@ function HeroCard({ listing, onOpen }: { listing: Listing; onOpen: () => void })
     <div className="hero" onClick={onOpen} role="button">
       <div>
         <div className="tag">nejlepší deal teď · {sourceLabel(listing.source)}</div>
+        {listing.image_url && (
+          <img className="hero-thumb" src={listing.image_url} alt="" loading="lazy" />
+        )}
         <h2>{listing.title}</h2>
         <div className="specs">
           <span>{listing.year ?? "—"}</span>
@@ -223,12 +301,19 @@ function DealRow({
     >
       <div className="rank">{String(rank).padStart(2, "0")}</div>
       <div className="car">
-        <div className="name">{listing.title}</div>
-        <div className="meta">
-          <span>{sourceLabel(listing.source)}</span>
-          <span>{listing.year ?? "—"}</span>
-          <span>{km(listing.mileage_km)}</span>
-          <span>{timeAgo(listing.first_seen)}</span>
+        {listing.image_url ? (
+          <img className="thumb" src={listing.image_url} alt="" loading="lazy" />
+        ) : (
+          <div className="thumb thumb-empty">—</div>
+        )}
+        <div className="car-text">
+          <div className="name">{listing.title}</div>
+          <div className="meta">
+            <span>{sourceLabel(listing.source)}</span>
+            <span>{listing.year ?? "—"}</span>
+            <span>{km(listing.mileage_km)}</span>
+            <span>{timeAgo(listing.first_seen)}</span>
+          </div>
         </div>
       </div>
       <div className="tags">

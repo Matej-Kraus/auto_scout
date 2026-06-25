@@ -335,12 +335,41 @@ body::after {
   font-size: 22px;
   color: var(--text-faint);
 }
+.car {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.car-text {
+  min-width: 0;
+}
+.thumb {
+  width: 72px;
+  height: 54px;
+  object-fit: cover;
+  border-radius: 8px;
+  flex: 0 0 auto;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+}
+.thumb-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  color: var(--text-faint);
+  font-size: 18px;
+}
 .car .name {
   font-family: var(--cond);
   font-weight: 700;
   font-size: 19px;
   letter-spacing: 0.01em;
   line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .car .meta {
   font-family: var(--mono);
@@ -615,4 +644,61 @@ body::after {
   .hero {
     grid-template-columns: 1fr;
   }
+}
+
+/* ---------- search bar + thumbnails ---------- */
+.searchbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 4px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--line-bright);
+  border-radius: 14px;
+}
+.searchbar:focus-within {
+  border-color: var(--amber);
+  box-shadow: 0 0 24px rgba(255, 106, 23, 0.18);
+}
+.search-ico {
+  font-size: 22px;
+  color: var(--text-faint);
+}
+.search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-family: var(--cond);
+  font-size: 20px;
+  letter-spacing: 0.01em;
+  padding: 12px 0;
+}
+.search-input::placeholder {
+  color: var(--text-faint);
+}
+.search-clear {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  background: var(--bg-raised);
+  border: 1px solid var(--line-bright);
+  border-radius: 999px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.search-clear:hover {
+  border-color: var(--amber);
+  color: var(--text);
+}
+.hero-thumb {
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+  border-radius: 12px;
+  margin: 10px 0 4px;
+  border: 1px solid var(--line);
 }

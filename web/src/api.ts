@@ -1,4 +1,4 @@
-import type { Listing, ListingDetail, Status } from "./types";
+import type { Listing, ListingDetail, Status, Watch, WatchInput } from "./types";
 
 // V produkci (Vercel) lze pres VITE_API_BASE smerovat na serverless endpoint.
 const BASE = import.meta.env.VITE_API_BASE ?? "";
@@ -25,4 +25,28 @@ export async function fetchStatus(): Promise<Status> {
   const res = await fetch(`${BASE}/api/status`);
   if (!res.ok) throw new Error(`API ${res.status}`);
   return res.json();
+}
+
+export async function fetchWatches(): Promise<Watch[]> {
+  const res = await fetch(`${BASE}/api/watches`);
+  if (!res.ok) throw new Error(`API ${res.status}`);
+  return res.json();
+}
+
+export async function addWatch(data: WatchInput): Promise<Watch> {
+  const res = await fetch(`${BASE}/api/watches`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.detail ?? `API ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function deleteWatch(id: number, purge = true): Promise<void> {
+  const res = await fetch(`${BASE}/api/watches/${id}?purge=${purge}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(`API ${res.status}`);
 }

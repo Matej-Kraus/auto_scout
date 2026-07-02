@@ -140,6 +140,7 @@ WATCHES: list[Watch] = [
             },
             "sbazar": {
                 "phrase": "bmw 130i",
+                "make": "BMW",
                 "require_year": True,
                 "name_includes": ["130i"],
                 "year_from": 2005,
@@ -173,6 +174,7 @@ WATCHES: list[Watch] = [
             },
             "sbazar": {
                 "phrase": "audi s3",
+                "make": "Audi",
                 "require_year": True,
                 "name_includes": ["s3"],
                 "year_from": 2006,
@@ -205,6 +207,7 @@ WATCHES: list[Watch] = [
             },
             "sbazar": {
                 "phrase": "golf gti",
+                "make": "Volkswagen",
                 "require_year": True,
                 "name_includes": ["golf", "gti"],
                 "year_from": 2012,

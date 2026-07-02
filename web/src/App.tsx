@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { fetchListings, fetchStatus } from "./api";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { addWatch, deleteWatch, fetchListings, fetchStatus, fetchWatches } from "./api";
 import { Drawer } from "./Drawer";
 import {
   czk,
@@ -7,7 +7,6 @@ import {
   drivetrainLabel,
   fuelLabel,
   km,
-  modelLabel,
   pct,
   sourceLabel,
   timeAgo,
@@ -21,10 +20,9 @@ import {
   isSearchActive,
   type SearchState,
 } from "./search";
-import type { Listing, Status } from "./types";
+import type { Listing, Status, Watch } from "./types";
 
-const MODELS = ["bmw_130i", "audi_s3", "golf_gti"];
-const PRICE_STEPS = [200_000, 250_000, 300_000, 400_000];
+const PRICE_STEPS = [200_000, 300_000, 400_000, 600_000];
 const FUELS = ["petrol", "diesel", "hybrid", "electric"];
 
 function yearOptions(min: number, max: number): number[] {
@@ -35,13 +33,16 @@ function yearOptions(min: number, max: number): number[] {
 
 export function App() {
   const [listings, setListings] = useState<Listing[] | null>(null);
+  const [watches, setWatches] = useState<Watch[]>([]);
   const [status, setStatus] = useState<Status | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<string | null>(null);
+  const [filter, setFilter] = useState<string | null>(null); // model_key
   const [openId, setOpenId] = useState<number | null>(null);
   const [search, setSearch] = useState<SearchState>(EMPTY_SEARCH);
+  const [showAdd, setShowAdd] = useState(false);
+  const [scanning, setScanning] = useState<string | null>(null); // model_key prave prohledavany
 
-  useEffect(() => {
+  const loadListings = useCallback(() => {
     setListings(null);
     setError(null);
     fetchListings({ active: true, model: filter ?? undefined })
@@ -49,11 +50,17 @@ export function App() {
       .catch((e) => setError(String(e)));
   }, [filter]);
 
-  useEffect(() => {
-    fetchStatus().then(setStatus).catch(() => {});
+  const loadWatches = useCallback(() => {
+    fetchWatches().then(setWatches).catch(() => {});
   }, []);
 
-  // Zdroje + paliva pro filtr (dynamicky z dat).
+  useEffect(loadListings, [loadListings]);
+  useEffect(() => {
+    loadWatches();
+    fetchStatus().then(setStatus).catch(() => {});
+  }, [loadWatches]);
+
+  // Dynamicke moznosti filtru (jen hodnoty, ktere v datech opravdu jsou).
   const sources = useMemo(
     () => Array.from(new Set((listings ?? []).map((l) => l.source))).sort(),
     [listings],
@@ -67,13 +74,11 @@ export function App() {
     return ys.length ? { min: Math.min(...ys), max: Math.max(...ys) } : null;
   }, [listings]);
 
-  // Vyhledávání + filtry běží client-side nad staženými inzeráty (okamžitá odezva).
+  // Fulltext + filtry client-side, pak slouceni stejneho auta z vic bazaru.
   const matched = useMemo(
     () => (listings ? applySearch(listings, search) : null),
     [listings, search],
   );
-
-  // Sloučení stejného auta z víc bazarů (dedupe) → clustery seřazené podle skóre.
   const clusters = useMemo<Cluster[] | null>(() => {
     if (matched == null) return null;
     if (!search.dedupe) return matched.map((l) => ({ primary: l, duplicates: [] }));
@@ -96,6 +101,40 @@ export function App() {
     clusters?.filter((c) => dealTier(c.primary.deal_score) === "hot").length ?? 0;
   const searchActive = isSearchActive(search);
 
+  const labelFor = useCallback(
+    (modelKey: string) => watches.find((w) => w.model_key === modelKey)?.label ?? modelKey,
+    [watches],
+  );
+
+  async function handleRemoveWatch(w: Watch) {
+    if (!window.confirm(`Přestat hlídat ${w.label}? Smažou se i jeho inzeráty.`)) return;
+    await deleteWatch(w.id, true).catch((e) => alert(String(e)));
+    if (filter === w.model_key) setFilter(null);
+    loadWatches();
+    loadListings();
+  }
+
+  async function handleScanNow(modelKey: string) {
+    setScanning(modelKey);
+    try {
+      const res = await fetch(`/api/run?model_key=${encodeURIComponent(modelKey)}`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error(`API ${res.status}`);
+      loadListings();
+      loadWatches();
+    } catch {
+      // V produkci (Vercel) nejde scrapovat ze serverless funkce — auto je ale
+      // uložené a cron ho prohledá při dalším běhu.
+      alert(
+        "Auto je uložené v garáži. Inzeráty se objeví po příštím automatickém prohledání (do hodiny).",
+      );
+      loadWatches();
+    } finally {
+      setScanning(null);
+    }
+  }
+
   return (
     <div className="shell">
       <header className="masthead">
@@ -105,95 +144,102 @@ export function App() {
             <h1>
               Deal <span>Hunter</span>
             </h1>
-            <div className="sub">telemetrie ojetých · cz + de</div>
+            <div className="sub">sauto · sbazar · autoscout24 · cz + de</div>
           </div>
         </div>
         <div className="readout">
-          {matched == null ? (
+          {clusters == null ? (
             "SCAN…"
           ) : (
             <>
-              <b>{clusters?.length ?? matched.length}</b> aut ·{" "}
+              <b>{clusters.length}</b> aut ·{" "}
               <b style={{ color: "var(--hot)" }}>{hotCount}</b> hot
               <br />
-              {status?.last_run
-                ? `naposledy ${timeAgo(status.last_run)}`
-                : "hlídám: 130i · S3 · GTI"}
+              {status?.last_run ? `naposledy ${timeAgo(status.last_run)}` : " "}
             </>
           )}
         </div>
       </header>
 
-      <div className="searchbar">
-        <span className="search-ico">⌕</span>
-        <input
-          className="search-input"
-          placeholder="Hledej: golf gti 2013 manual…"
-          value={search.query}
-          onChange={(e) => setSearch((s) => ({ ...s, query: e.target.value }))}
-        />
-        {searchActive && (
-          <button className="search-clear" onClick={() => setSearch(EMPTY_SEARCH)}>
-            ✕ zrušit
+      <div className="deck">
+        <div className="searchbar">
+          <span className="search-ico">⌕</span>
+          <input
+            className="search-input"
+            placeholder="Hledej: golf gti 2013 manual…"
+            value={search.query}
+            onChange={(e) => setSearch((s) => ({ ...s, query: e.target.value }))}
+          />
+          {searchActive && (
+            <button className="search-clear" onClick={() => setSearch(EMPTY_SEARCH)}>
+              ✕ zrušit
+            </button>
+          )}
+        </div>
+
+        <div className="deck-row">
+          <span className="lbl">Garáž</span>
+          <button
+            className={`pill ${filter === null ? "active" : ""}`}
+            onClick={() => setFilter(null)}
+          >
+            Vše
           </button>
+          {watches.map((w) => (
+            <span key={w.model_key} className="garage-pill">
+              <button
+                className={`pill ${filter === w.model_key ? "active" : ""}`}
+                onClick={() => setFilter(filter === w.model_key ? null : w.model_key)}
+                title={`${w.active_listings} aktivních inzerátů`}
+              >
+                {w.label}
+                <em>{w.active_listings}</em>
+              </button>
+              {!w.curated && (
+                <button
+                  className="pill-x"
+                  title={`Přestat hlídat ${w.label}`}
+                  onClick={() => handleRemoveWatch(w)}
+                >
+                  ✕
+                </button>
+              )}
+            </span>
+          ))}
+          <button className="pill pill-add" onClick={() => setShowAdd((v) => !v)}>
+            {showAdd ? "− zavřít" : "+ Přidat auto"}
+          </button>
+        </div>
+
+        {showAdd && (
+          <AddWatchForm
+            onAdded={(w) => {
+              setShowAdd(false);
+              loadWatches();
+              handleScanNow(w.model_key);
+            }}
+          />
         )}
-      </div>
 
-      <div className="controls">
-        <span className="lbl">Garáž</span>
-        <button
-          className={`pill ${filter === null ? "active" : ""}`}
-          onClick={() => setFilter(null)}
-        >
-          Vše
-        </button>
-        {MODELS.map((m) => (
+        <div className="deck-row">
+          <span className="lbl">Filtr</span>
           <button
-            key={m}
-            className={`pill ${filter === m ? "active" : ""}`}
-            onClick={() => setFilter(m)}
+            className={`pill ${search.manualOnly ? "active" : ""}`}
+            onClick={() => setSearch((s) => ({ ...s, manualOnly: !s.manualOnly }))}
           >
-            {modelLabel(m)}
+            Jen manuál
           </button>
-        ))}
-      </div>
-
-      <div className="controls">
-        <span className="lbl">Filtr</span>
-        <button
-          className={`pill ${search.manualOnly ? "active" : ""}`}
-          onClick={() => setSearch((s) => ({ ...s, manualOnly: !s.manualOnly }))}
-        >
-          Jen manuál
-        </button>
-        {PRICE_STEPS.map((p) => (
-          <button
-            key={p}
-            className={`pill ${search.maxPrice === p ? "active" : ""}`}
-            onClick={() =>
-              setSearch((s) => ({ ...s, maxPrice: s.maxPrice === p ? null : p }))
-            }
-          >
-            do {Math.round(p / 1000)}k
-          </button>
-        ))}
-        {sources.length > 1 &&
-          sources.map((src) => (
+          {PRICE_STEPS.map((p) => (
             <button
-              key={src}
-              className={`pill ${search.source === src ? "active" : ""}`}
+              key={p}
+              className={`pill ${search.maxPrice === p ? "active" : ""}`}
               onClick={() =>
-                setSearch((s) => ({ ...s, source: s.source === src ? null : src }))
+                setSearch((s) => ({ ...s, maxPrice: s.maxPrice === p ? null : p }))
               }
             >
-              {sourceLabel(src)}
+              do {Math.round(p / 1000)}k
             </button>
           ))}
-      </div>
-
-      {(fuels.length > 0 || years) && (
-        <div className="controls">
-          <span className="lbl">Palivo · rok</span>
           {fuels.map((f) => (
             <button
               key={f}
@@ -203,6 +249,18 @@ export function App() {
               {fuelLabel(f)}
             </button>
           ))}
+          {sources.length > 1 &&
+            sources.map((src) => (
+              <button
+                key={src}
+                className={`pill ${search.source === src ? "active" : ""}`}
+                onClick={() =>
+                  setSearch((s) => ({ ...s, source: s.source === src ? null : src }))
+                }
+              >
+                {sourceLabel(src)}
+              </button>
+            ))}
           {years && (
             <>
               <select
@@ -243,24 +301,31 @@ export function App() {
           )}
           <button
             className={`pill ${search.dedupe ? "active" : ""}`}
-            title="Sloučit stejné auto nabízené na víc bazarech do jednoho"
+            title="Stejné auto nabízené na víc bazarech ukázat jen jednou"
             onClick={() => setSearch((s) => ({ ...s, dedupe: !s.dedupe }))}
           >
-            ⛓ Sloučit duplicity
+            ⛓ Bez duplicit
           </button>
+        </div>
+      </div>
+
+      {scanning && (
+        <div className="state">
+          <div className="spin" />
+          PROHLEDÁVÁM BAZARY PRO {labelFor(scanning).toUpperCase()}… (~1 min)
         </div>
       )}
 
       {error && <div className="state">CHYBA: {error}. Běží FastAPI na :8000?</div>}
 
-      {!error && listings == null && (
+      {!error && listings == null && !scanning && (
         <div className="state">
           <div className="spin" />
           SKENUJI TRH…
         </div>
       )}
 
-      {!error && matched != null && matched.length === 0 && (
+      {!error && clusters != null && clusters.length === 0 && !scanning && (
         <div className="state">
           {listings && listings.length > 0 ? (
             <>
@@ -272,7 +337,8 @@ export function App() {
             <>
               ŽÁDNÉ AKTIVNÍ INZERÁTY.
               <br />
-              Spusť pipeline: <code>python -m app.run_once</code>
+              Přidej auto tlačítkem „+ Přidat auto“, nebo spusť:{" "}
+              <code>python -m app.run_once</code>
             </>
           )}
         </div>
@@ -292,14 +358,14 @@ export function App() {
             <h3>{searchActive ? "Výsledky hledání" : "Žebříček dealů"}</h3>
             <span className="count">SEŘAZENO DLE SKÓRE ▾</span>
           </div>
-          <div className="grid">
+          <div className="cards">
             {restClusters.map((c, i) => (
-              <DealRow
+              <CarCard
                 key={c.primary.id}
                 listing={c.primary}
                 duplicates={c.duplicates}
                 rank={i + (heroCluster ? 2 : 1)}
-                delay={i * 0.03}
+                delay={Math.min(i, 12) * 0.04}
                 onOpen={() => setOpenId(c.primary.id)}
               />
             ))}
@@ -312,10 +378,94 @@ export function App() {
   );
 }
 
+function AddWatchForm({ onAdded }: { onAdded: (w: Watch) => void }) {
+  const [make, setMake] = useState("");
+  const [model, setModel] = useState("");
+  const [variant, setVariant] = useState("");
+  const [yearFrom, setYearFrom] = useState("");
+  const [yearTo, setYearTo] = useState("");
+  const [priceTo, setPriceTo] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setErr(null);
+    setBusy(true);
+    try {
+      const w = await addWatch({
+        make,
+        model,
+        variant,
+        year_from: yearFrom ? Number(yearFrom) : null,
+        year_to: yearTo ? Number(yearTo) : null,
+        price_to_czk: priceTo ? Number(priceTo) : null,
+      });
+      onAdded(w);
+    } catch (ex) {
+      setErr(String(ex instanceof Error ? ex.message : ex));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="addform" onSubmit={submit}>
+      <input
+        required
+        placeholder="Značka * (Škoda)"
+        value={make}
+        onChange={(e) => setMake(e.target.value)}
+      />
+      <input
+        required
+        placeholder="Model * (Octavia)"
+        value={model}
+        onChange={(e) => setModel(e.target.value)}
+      />
+      <input
+        placeholder="Varianta (RS)"
+        value={variant}
+        onChange={(e) => setVariant(e.target.value)}
+      />
+      <input
+        placeholder="Rok od"
+        inputMode="numeric"
+        value={yearFrom}
+        onChange={(e) => setYearFrom(e.target.value)}
+      />
+      <input
+        placeholder="Rok do"
+        inputMode="numeric"
+        value={yearTo}
+        onChange={(e) => setYearTo(e.target.value)}
+      />
+      <input
+        placeholder="Cena do (Kč)"
+        inputMode="numeric"
+        value={priceTo}
+        onChange={(e) => setPriceTo(e.target.value)}
+      />
+      <button className="pill pill-add" type="submit" disabled={busy}>
+        {busy ? "Přidávám…" : "Hlídat a prohledat"}
+      </button>
+      {err && <div className="addform-err">{err}</div>}
+    </form>
+  );
+}
+
+function AlsoOn({ duplicates }: { duplicates: Listing[] }) {
+  if (duplicates.length === 0) return null;
+  return (
+    <span className="alsoon" title="Stejné auto nalezené i na těchto bazarech">
+      také na {duplicates.map((d) => sourceLabel(d.source)).join(", ")}
+    </span>
+  );
+}
+
 function Gauge({ score }: { score: number }) {
   const p = Math.max(0, Math.min(1, score / 0.3)); // 30 % = plný gauge
-  const r = 64;
-  const c = Math.PI * r; // půlkruh
+  const c = Math.PI * 64;
   const dash = c * p;
   return (
     <div className="gauge">
@@ -340,15 +490,6 @@ function Gauge({ score }: { score: number }) {
       <div className="val">{Math.round(score * 100)}</div>
       <div className="unit">deal index</div>
     </div>
-  );
-}
-
-function AlsoOn({ duplicates }: { duplicates: Listing[] }) {
-  if (duplicates.length === 0) return null;
-  return (
-    <span className="alsoon" title="Stejné auto nalezené i na těchto bazarech">
-      také na {duplicates.map((d) => sourceLabel(d.source)).join(", ")}
-    </span>
   );
 }
 
@@ -391,7 +532,13 @@ function HeroCard({
             </span>
           )}
         </div>
-        <a className="cta" href={listing.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
+        <a
+          className="cta"
+          href={listing.url}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(e) => e.stopPropagation()}
+        >
           Otevřít inzerát ↗
         </a>
       </div>
@@ -400,7 +547,7 @@ function HeroCard({
   );
 }
 
-function DealRow({
+function CarCard({
   listing,
   duplicates,
   rank,
@@ -416,58 +563,53 @@ function DealRow({
   const tier = dealTier(listing.deal_score);
   const below = pct(listing.pct_below);
   return (
-    <div
-      className={`row tier-${tier}`}
+    <article
+      className={`card tier-${tier}`}
       style={{ animationDelay: `${delay}s` }}
       onClick={onOpen}
       role="button"
     >
-      <div className="rank">{String(rank).padStart(2, "0")}</div>
-      <div className="car">
+      <div className="card-photo">
         {listing.image_url ? (
-          <img className="thumb" src={listing.image_url} alt="" loading="lazy" />
+          <img src={listing.image_url} alt="" loading="lazy" />
         ) : (
-          <div className="thumb thumb-empty">—</div>
+          <div className="card-noimg">bez foto</div>
         )}
-        <div className="car-text">
-          <div className="name">{listing.title}</div>
-          <div className="meta">
-            <span>{sourceLabel(listing.source)}</span>
-            <span>{listing.year ?? "—"}</span>
-            <span>{km(listing.mileage_km)}</span>
-            {listing.fuel_type && <span>{fuelLabel(listing.fuel_type)}</span>}
-            <span>{timeAgo(listing.first_seen)}</span>
-          </div>
+        <span className="card-rank">{String(rank).padStart(2, "0")}</span>
+        {listing.deal_score != null && (
+          <span className={`card-score tier-${tier}`}>
+            {Math.round(listing.deal_score * 100)}
+          </span>
+        )}
+      </div>
+      <div className="card-body">
+        <div className="card-title">{listing.title}</div>
+        <div className="card-meta">
+          <span>{listing.year ?? "—"}</span>
+          <span>{km(listing.mileage_km)}</span>
+          <span>{transmissionLabel(listing.transmission)}</span>
+          {listing.fuel_type && <span>{fuelLabel(listing.fuel_type)}</span>}
+        </div>
+        <div className="card-priceline">
+          <span className="card-price">{czk(listing.price_czk)}</span>
+          {below != null && below > 0 ? (
+            <span className="card-below">−{below} %</span>
+          ) : (
+            <span className="card-inprice">v ceně</span>
+          )}
+        </div>
+        <div className="card-foot">
+          <span className="card-src">{sourceLabel(listing.source)}</span>
+          {listing.drivetrain && listing.drivetrain !== "fwd" && (
+            <span className={`chip ${listing.drivetrain}`}>
+              {drivetrainLabel(listing.drivetrain)}
+            </span>
+          )}
+          {listing.transmission === "manual" && <span className="chip man">MANUÁL</span>}
           <AlsoOn duplicates={duplicates} />
+          <span className="card-age">{timeAgo(listing.first_seen)}</span>
         </div>
       </div>
-      <div className="tags">
-        {listing.transmission === "manual" && <span className="chip man">MANUÁL</span>}
-        {listing.drivetrain && listing.drivetrain !== "fwd" && (
-          <span className={`chip ${listing.drivetrain}`}>{drivetrainLabel(listing.drivetrain)}</span>
-        )}
-      </div>
-      <div className="col-num col-price">
-        <div className="price-num">{czk(listing.price_czk)}</div>
-        {listing.expected_price != null && (
-          <div className="exp-num">odhad {czk(listing.expected_price)}</div>
-        )}
-      </div>
-      <div className="col-num col-exp">
-        {below != null && below > 0 ? (
-          <div className="price-num" style={{ color: "var(--good)" }}>
-            −{below} %
-          </div>
-        ) : (
-          <div className="exp-num">v ceně</div>
-        )}
-      </div>
-      <div className={`scorecell tier-${tier}`}>
-        <div className="big">
-          {listing.deal_score != null ? Math.round(listing.deal_score * 100) : "—"}
-        </div>
-        <div className="sub">{listing.score_method === "median" ? "medián" : "index"}</div>
-      </div>
-    </div>
+    </article>
   );
 }

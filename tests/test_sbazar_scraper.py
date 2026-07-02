@@ -17,25 +17,30 @@ def _golf_watch():
     return next(w for w in WATCHES if w.model == "golf_gti")
 
 
+_CAR_CAT = {"id": 153, "name": "Volkswagen"}
+
 _SAMPLE = {
-    "pagination": {"total": 4},
+    "pagination": {"total": 5},
     "results": [
         {  # sedi: Mk7 s rokem i najezdem
             "id": 1,
             "name": "VW Golf VII 2.0 GTI, r.2016, 93804 km",
             "price": 380000,
+            "category": _CAR_CAT,
             "images": [{"url": "//d46-a.sdn.cz/x/a.jpeg"}],
         },
         {  # spravne zahozen: stara generace bez roku (require_year)
             "id": 2,
             "name": "VW Golf I GTi veteran",
             "price": 250000,
+            "category": _CAR_CAT,
             "images": [],
         },
         {  # zahozen: rok mimo rozsah (2008 < 2012)
             "id": 3,
             "name": "VW Golf V GTI 2008 super stav",
             "price": 200000,
+            "category": _CAR_CAT,
             "images": [],
         },
         {  # zahozen: cena dohodou
@@ -43,6 +48,14 @@ _SAMPLE = {
             "name": "VW Golf GTI 2015",
             "price": 0,
             "price_by_agreement": True,
+            "category": _CAR_CAT,
+            "images": [],
+        },
+        {  # zahozen: nahradni dil, ne cele auto (kategorie)
+            "id": 5,
+            "name": "Naraznik VW Golf GTI 2016 predni 165000 km",
+            "price": 380000,
+            "category": {"id": 278, "name": "Části karoserie"},
             "images": [],
         },
     ],
@@ -54,7 +67,7 @@ def _client_from_sample() -> httpx.Client:
         offset = int(request.url.params.get("offset", 0))
         if offset == 0:
             return httpx.Response(200, json=_SAMPLE)
-        return httpx.Response(200, json={"pagination": {"total": 4}, "results": []})
+        return httpx.Response(200, json={"pagination": {"total": 5}, "results": []})
 
     return httpx.Client(transport=httpx.MockTransport(handler))
 

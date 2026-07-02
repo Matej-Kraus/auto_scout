@@ -45,6 +45,23 @@ def build_scrapers() -> list:
     return scrapers
 
 
+def load_all_watches(session) -> list:
+    """Kuratorske watche z config.py + uzivatelske z DB (tabulka watches)."""
+    from sqlalchemy import select
+
+    from app.models import WatchRow
+    from app.watch_builder import build_watch
+
+    watches = list(WATCHES)
+    known = {w.model for w in watches}
+    rows = session.scalars(select(WatchRow).where(WatchRow.enabled.is_(True))).all()
+    for row in rows:
+        if row.model_key not in known:
+            watches.append(build_watch(row))
+            known.add(row.model_key)
+    return watches
+
+
 def main() -> None:
     from app.pipeline import run_pipeline
 
@@ -52,7 +69,9 @@ def main() -> None:
     scrapers = build_scrapers()
 
     with session_scope() as session:
-        diff = run_pipeline(session, WATCHES, scrapers)
+        watches = load_all_watches(session)
+        logger.info("hlidam %d aut: %s", len(watches), ", ".join(w.label for w in watches))
+        diff = run_pipeline(session, watches, scrapers)
         sent = process_alerts(session, diff)
         prune_price_history(session)
 

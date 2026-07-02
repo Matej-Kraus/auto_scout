@@ -41,6 +41,25 @@ class ListingDetailOut(ListingOut):
     price_history: list[PricePoint] = []
 
 
+class WatchIn(BaseModel):
+    make: str
+    model: str
+    variant: str = ""
+    year_from: int | None = None
+    year_to: int | None = None
+    price_from_czk: int | None = None
+    price_to_czk: int | None = None
+
+
+class WatchOut(WatchIn):
+    id: int
+    model_key: str
+    label: str
+    enabled: bool
+    curated: bool = False  # True = natvrdo v config.py (nejde smazat pres API)
+    active_listings: int = 0
+
+
 class StatusOut(BaseModel):
     last_run: datetime | None  # ~ max(last_seen): kdy pipeline naposledy nesto videla
     last_alert: datetime | None

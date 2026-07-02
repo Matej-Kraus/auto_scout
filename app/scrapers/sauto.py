@@ -109,6 +109,10 @@ class SautoScraper(Scraper):
                 return None
             if params.get("year_to") and year > params["year_to"]:
                 return None
+        elif params.get("year_from") or params.get("year_to"):
+            # Bez roku nepoznam generaci → inzerat by kazil scoring dataset
+            # (stary Golf GTI vypada jako mega deal vuci Mk7 trhu). Zahodit.
+            return None
 
         price = item.get("price")
         if not price:

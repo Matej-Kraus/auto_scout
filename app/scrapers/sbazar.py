@@ -41,6 +41,30 @@ _HEADERS = {
     "Referer": "https://www.sbazar.cz/",
 }
 
+# Sbazar je obecny bazar — fulltext vraci i nahradni dily, kola, naraznik…
+# Cela auta jsou v kategorii znacky ("Škoda", "BMW") nebo v obecnych auto
+# kategoriich. Vse ostatni (dily, karoserie, bourana auta) zahazujeme.
+_CAR_CATEGORY_NAMES = {"do 3,5 t", "ostatni auta", "osobni vozy", "veterani"}
+
+
+def _fold(text: str) -> str:
+    import unicodedata
+
+    norm = unicodedata.normalize("NFKD", text)
+    return norm.encode("ascii", "ignore").decode("ascii").lower().strip()
+
+
+def _is_whole_car(item: dict, make_hint: str | None) -> bool:
+    name = _fold((item.get("category") or {}).get("name") or "")
+    if not name:
+        return False
+    if name in _CAR_CATEGORY_NAMES:
+        return True
+    if make_hint and name == _fold(make_hint):
+        return True  # kategorie pojmenovana po znacce = cele vozy te znacky
+    return False
+
+
 # "136 tis. km" / "136 tisíc km" → 136000
 _MILEAGE_TIS = re.compile(r"(\d{1,3})\s*tis", re.IGNORECASE)
 # "najeto 93804 km" / "93 804 km" / "120000km" → cele cislo pred "km"
@@ -94,6 +118,8 @@ class SbazarScraper(Scraper):
 
     def _match_and_build(self, item: dict, query: SearchQuery) -> RawListing | None:
         params = query.params
+        if not _is_whole_car(item, params.get("make")):
+            return None  # nahradni dil / prislusenstvi, ne cele auto
         name = item.get("name") or ""
         low = name.lower()
         for needle in params.get("name_includes", []):

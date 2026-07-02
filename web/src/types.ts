@@ -31,6 +31,32 @@ export interface ListingDetail extends Listing {
   price_history: PricePoint[];
 }
 
+export interface Watch {
+  id: number;
+  make: string;
+  model: string;
+  variant: string;
+  year_from: number | null;
+  year_to: number | null;
+  price_from_czk: number | null;
+  price_to_czk: number | null;
+  model_key: string;
+  label: string;
+  enabled: boolean;
+  curated: boolean;
+  active_listings: number;
+}
+
+export interface WatchInput {
+  make: string;
+  model: string;
+  variant?: string;
+  year_from?: number | null;
+  year_to?: number | null;
+  price_from_czk?: number | null;
+  price_to_czk?: number | null;
+}
+
 export interface Status {
   last_run: string | null;
   last_alert: string | null;

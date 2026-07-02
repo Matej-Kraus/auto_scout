@@ -1,11 +1,12 @@
 # 🏁 Car Deal Hunter
 
-Osobní nástroj, který hlídá inzeráty ojetých aut na víc portálech, ukládá historii
-cen, **boduje každou nabídku vůči trhu** a pošle **push na Telegram**, když naskočí
-dobrý deal nebo když existující inzerát zlevní.
+Osobní nástroj, který hlídá inzeráty ojetých aut na **CZ i DE bazarech** (Sauto,
+Sbazar, AutoScout24), ukládá historii cen, **boduje každou nabídku vůči trhu**
+a pošle **email/Telegram**, když naskočí dobrý deal nebo inzerát zlevní.
 
-Hlídané vozy (výchozí): **BMW 130i (E87)**, **Audi S3 (8P)**, **VW Golf GTI (Mk7)**.
-Preference do skóre: manuál, RWD/AWD, nízký nájezd, rozpočet 200–300k Kč.
+**Hlídat jde libovolné auto** — přidává se přímo ve webu („+ Přidat auto":
+značka, model, varianta, roky, cena) nebo natvrdo v `app/config.py`.
+Výchozí: BMW 130i (E87), Audi S3 (8P), VW Golf GTI (Mk7).
 
 > Detailní kontext a rozhodnutí jsou v [`CLAUDE.md`](./CLAUDE.md) a ve
 > [spec dokumentu](./docs/superpowers/specs/2026-06-18-car-deal-hunter-design.md).
@@ -15,16 +16,19 @@ Preference do skóre: manuál, RWD/AWD, nízký nájezd, rozpočet 200–300k K�
 ## Jak to funguje
 
 ```
-watch (model+generace) → scraper(y) → normalize → DB (Listing + PriceHistory)
-   → diff (new / price-drop) → scoring vůči trhu → Telegram alert (anti-spam)
+watch (config + web garáž) → scrapery → normalize → DB (Listing + PriceHistory)
+   → diff (new / price-drop) → scoring vůči trhu → email/Telegram alert (anti-spam)
 ```
 
 - **Scrapery** jsou pluginy (`app/scrapers/*.py`), každý portál = jeden modul.
-  Funkční: **Sauto** (interní JSON API). Best-effort: **AutoScout24**, **Mobile.de**
-  (DE portály, chráněné Cloudflarem — z cloud IP občas padají, výchozí vypnuté).
+  Funkční: **Sauto**, **Sbazar** (JSON API), **AutoScout24.de** (`__NEXT_DATA__`).
+  **Mobile.de** je blokovaný Akamaiem i lokálně — vyžadoval by residential proxy;
+  německý trh pokrývá AutoScout24. Facebook Marketplace zatím není (login + ban riziko).
 - **Scoring** (`app/scoring/engine.py`): lineární regrese `cena ~ rok + km` (numpy),
   bonusy za manuál / nízký nájezd / RWD-AWD. Při < 8 vzorcích fallback na medián.
-- **Dashboard** (`web/`): React + TS + Vite, žebříček dealů + graf vývoje cen.
+- **Dashboard** (`web/`): React + TS + Vite — fulltext („golf gti 2013 manual"),
+  filtry (palivo, rok, cena, zdroj), fotkové karty, sloučení stejného auta z víc
+  bazarů, graf vývoje cen, správa garáže.
 
 ---
 
@@ -85,26 +89,47 @@ A do `app/config.py` k danému watchi doplnit `portal_params["mobilede"]`.
 
 ---
 
-## Deploy
+## Deploy (vše zdarma)
 
-| Co        | Kde                | Jak                                                  |
-|-----------|--------------------|------------------------------------------------------|
-| Scraper   | GitHub Actions cron| `.github/workflows/hunt.yml` (`*/30 * * * *`)        |
-| DB        | Neon (Postgres)    | `DATABASE_URL` do GitHub Secrets i Vercel env        |
-| Dashboard | Vercel             | `vercel.json` builduje `web/`, `api/index.py` čte DB |
+Architektura: **Neon** (Postgres, sdílená DB) ← **GitHub Actions** (scrapuje každou
+hodinu) → **Vercel** (web + read/watch API).
 
-**GitHub Secrets** (Settings → Secrets and variables → Actions):
-`DATABASE_URL`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`. Repo je **public** kvůli
-free minutám — proto **nikdy žádné secrets v kódu**.
+**1. Neon (databáze, ~5 min)**
+1. [neon.tech](https://neon.tech) → registrace → New project (region EU).
+2. Zkopíruj connection string a uprav schéma na:
+   `postgresql+psycopg://user:pass@host/db?sslmode=require`
+   (bez uvozovek, bez `psql` na začátku — kód běžné překlepy opraví sám).
 
-`DATABASE_URL` pro Neon: `postgresql+psycopg://user:pass@host/db`.
+**2. GitHub Secrets (scraping + email, ~5 min)**
+Repo → Settings → Secrets and variables → Actions → New repository secret:
+- `DATABASE_URL` — Neon string z kroku 1
+- `SMTP_USER` — tvůj Gmail
+- `SMTP_PASSWORD` — Gmail **App password** (Google účet → Security → 2FA → App passwords)
+- `EMAIL_TO` — kam posílat alerty
+- volitelně `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` (+ Actions Variable `NOTIFY_ENABLED=true`)
+
+Pak Actions → hunt → **Run workflow** (první ostrý běh naplní Neon).
+
+**3. Vercel (web, ~5 min)**
+1. [vercel.com](https://vercel.com) → Add New Project → Import z GitHubu (`auto_scout`).
+2. Nastavení projektu → Environment Variables → přidej `DATABASE_URL` (stejný Neon string).
+3. Deploy. `vercel.json` builduje `web/`, `api/index.py` obsluhuje `/api/*` z Neonu.
+
+Repo je **public** kvůli free minutám — proto **nikdy žádné secrets v kódu**.
+
+Pozn.: tlačítko „Prohledat teď" funguje jen lokálně (Vercel serverless nemůže
+scrapovat — timeout). Na webu se nové auto prohledá při dalším cron běhu (do hodiny).
 
 ---
 
 ## Konfigurace watchů
 
-Vše v [`app/config.py`](./app/config.py) → `WATCHES`. Přidání vozu = jeden `Watch`
-s `portal_params` (pro Sauto stačí `model_seo` ve tvaru `"značka:model"` + filtry).
+**Web**: tlačítko „+ Přidat auto" (značka, model, varianta, roky, cena) — uloží se
+do DB (tabulka `watches`), cron ho pak automaticky prohledává na všech portálech.
+Dotazy pro portály staví [`app/watch_builder.py`](./app/watch_builder.py).
+
+**Kód**: kurátorské watche v [`app/config.py`](./app/config.py) → `WATCHES`
+(plná kontrola nad portal_params, např. `power_from_kw` pro BMW 130i).
 
 ---
 

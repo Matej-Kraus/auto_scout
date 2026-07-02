@@ -15,9 +15,16 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, select
 
-from app.api_schemas import ListingDetailOut, ListingOut, PricePoint, StatusOut
+from app.api_schemas import (
+    ListingDetailOut,
+    ListingOut,
+    PricePoint,
+    StatusOut,
+    WatchIn,
+    WatchOut,
+)
 from app.db import SessionLocal, init_db
-from app.models import Alert, Listing
+from app.models import Alert, Listing, WatchRow
 from app.scoring.engine import score_listing
 
 logger = logging.getLogger(__name__)
@@ -161,10 +168,130 @@ def status() -> StatusOut:
     )
 
 
-@app.post("/api/run")
-def trigger_run() -> dict:
-    """Rucni spusteni pipeline (lokalni vyvoj). Synchronni — chvili to trva."""
-    from app.run_once import main as run_main
+def _count_active(session, model_key: str) -> int:
+    return (
+        session.scalar(
+            select(func.count(Listing.id)).where(
+                Listing.model == model_key, Listing.is_active.is_(True)
+            )
+        )
+        or 0
+    )
 
-    run_main()
-    return {"status": "ok"}
+
+@app.get("/api/watches", response_model=list[WatchOut])
+def list_watches() -> list[WatchOut]:
+    """Vsechna hlidana auta: kuratorska z config.py + uzivatelska z DB."""
+    from app.config import WATCHES
+
+    out: list[WatchOut] = []
+    with SessionLocal() as session:
+        for i, w in enumerate(WATCHES):
+            out.append(
+                WatchOut(
+                    id=-(i + 1),  # zaporne id = kuratorske, nejde smazat
+                    make=w.label.split()[0],
+                    model=" ".join(w.label.split()[1:]) or w.label,
+                    model_key=w.model,
+                    label=w.label,
+                    enabled=True,
+                    curated=True,
+                    active_listings=_count_active(session, w.model),
+                )
+            )
+        rows = session.scalars(select(WatchRow)).all()
+        for r in rows:
+            label = " ".join(x for x in (r.make, r.model_name, r.variant) if x)
+            out.append(
+                WatchOut(
+                    id=r.id,
+                    make=r.make,
+                    model=r.model_name,
+                    variant=r.variant or "",
+                    year_from=r.year_from,
+                    year_to=r.year_to,
+                    price_from_czk=r.price_from_czk,
+                    price_to_czk=r.price_to_czk,
+                    model_key=r.model_key,
+                    label=label,
+                    enabled=r.enabled,
+                    curated=False,
+                    active_listings=_count_active(session, r.model_key),
+                )
+            )
+    return out
+
+
+@app.post("/api/watches", response_model=WatchOut)
+def add_watch(data: WatchIn) -> WatchOut:
+    """Prida nove hlidane auto. Inzeraty se objevi po pristim behu pipeline."""
+    from app.watch_builder import model_key_for
+
+    make, model = data.make.strip(), data.model.strip()
+    if not make or not model:
+        raise HTTPException(status_code=422, detail="Znacka i model jsou povinne")
+
+    key = model_key_for(make, model, data.variant)
+    with SessionLocal() as session:
+        existing = session.scalar(select(WatchRow).where(WatchRow.model_key == key))
+        if existing is not None:
+            raise HTTPException(status_code=409, detail=f"Uz hlidam: {key}")
+        row = WatchRow(
+            make=make,
+            model_name=model,
+            variant=data.variant.strip(),
+            model_key=key,
+            year_from=data.year_from,
+            year_to=data.year_to,
+            price_from_czk=data.price_from_czk,
+            price_to_czk=data.price_to_czk,
+        )
+        session.add(row)
+        session.commit()
+        label = " ".join(x for x in (make, model, data.variant.strip()) if x)
+        return WatchOut(
+            **data.model_dump(),
+            id=row.id,
+            model_key=key,
+            label=label,
+            enabled=True,
+        )
+
+
+@app.delete("/api/watches/{watch_id}")
+def delete_watch(watch_id: int, purge: bool = False) -> dict:
+    """Smaze uzivatelsky watch. purge=true smaze i jeho inzeraty."""
+    with SessionLocal() as session:
+        row = session.get(WatchRow, watch_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Watch nenalezen")
+        if purge:
+            for lst in session.scalars(
+                select(Listing).where(Listing.model == row.model_key)
+            ).all():
+                session.delete(lst)
+        session.delete(row)
+        session.commit()
+    return {"status": "deleted"}
+
+
+@app.post("/api/run")
+def trigger_run(model_key: str | None = None) -> dict:
+    """Rucni spusteni pipeline (lokalni vyvoj). Synchronni — chvili to trva.
+
+    S model_key prohleda jen jedno auto (pro "Prohledat teď" po pridani watche).
+    """
+    from app.alerting import process_alerts
+    from app.pipeline import run_pipeline
+    from app.run_once import build_scrapers, load_all_watches
+
+    with SessionLocal() as session:
+        watches = load_all_watches(session)
+        if model_key:
+            watches = [w for w in watches if w.model == model_key]
+            if not watches:
+                raise HTTPException(status_code=404, detail=f"Watch {model_key} nenalezen")
+        diff = run_pipeline(session, watches, build_scrapers())
+        sent = process_alerts(session, diff)
+        session.commit()
+    return {"status": "ok", "summary": diff.summary, "alerts": sent}

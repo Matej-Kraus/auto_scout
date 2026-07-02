@@ -58,6 +58,9 @@ export function Drawer({ id, onClose }: { id: number; onClose: () => void }) {
           <>
             <div className="src">{sourceLabel(data.source)}</div>
             <h2>{data.title}</h2>
+            {data.image_url && (
+              <img className="drawer-photo" src={data.image_url} alt="" loading="lazy" />
+            )}
 
             <div className="statrow">
               <div className="stat">

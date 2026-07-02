@@ -131,6 +131,12 @@ def parse_listings(page_props: dict, query: SearchQuery) -> list[RawListing]:
         if not price:
             continue
 
+        year = _year(item, vehicle)
+        if year is None and (query.params.get("year_from") or query.params.get("year_to")):
+            # Server-side freg filtr by mel rok zarucit; kdyz presto chybi,
+            # radeji zahodit nez pustit neznamou generaci do scoringu.
+            continue
+
         out.append(
             RawListing(
                 source="autoscout24",
@@ -139,7 +145,7 @@ def parse_listings(page_props: dict, query: SearchQuery) -> list[RawListing]:
                 url=_url(item),
                 price=price,
                 currency="EUR",
-                year=_year(item, vehicle),
+                year=year,
                 mileage_km=_mileage(item),
                 transmission_text=_gearbox(item),
                 drivetrain_text=title,

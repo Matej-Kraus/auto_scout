@@ -74,6 +74,30 @@ class PriceHistory(Base):
     listing: Mapped["Listing"] = relationship(back_populates="price_history")
 
 
+class WatchRow(Base):
+    """Uzivatelem pridane hlidane auto (dynamicky watch, doplnuje kurátorske v config.py).
+
+    Z make/model/variant se automaticky sestavi dotazy pro vsechny portaly
+    (app/watch_builder.py). `model_key` je slug pouzity v Listing.model.
+    """
+
+    __tablename__ = "watches"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    make: Mapped[str] = mapped_column(String(64))  # "Škoda"
+    model_name: Mapped[str] = mapped_column(String(64))  # "Octavia"
+    variant: Mapped[str] = mapped_column(String(64), default="")  # "RS" (volitelne)
+    model_key: Mapped[str] = mapped_column(String(96), unique=True)  # "skoda_octavia_rs"
+
+    year_from: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    year_to: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    price_from_czk: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    price_to_czk: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class Alert(Base):
     __tablename__ = "alerts"
 

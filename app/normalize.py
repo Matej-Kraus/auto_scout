@@ -16,6 +16,16 @@ _AWD_HINTS = ("quattro", "4motion", "4x4", "awd", "allrad", "xdrive", "4wd", "4m
 _RWD_HINTS = ("rwd", "zadni", "zadní", "hinterrad", "heckantrieb")
 _FWD_HINTS = ("fwd", "predni", "přední", "frontantrieb", "vorderrad")
 
+# --- mapovani paliva (poradi = priorita; hybrid/elektro pred benzinem) ---
+_FUEL_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("electric", ("elektro", "electric", "elektrisch", "ev ")),
+    ("hybrid", ("hybrid", "hybridní", "hybridni", "plug-in", "phev")),
+    ("diesel", ("nafta", "diesel", "tdi", "cdi", "hdi")),
+    ("lpg", ("lpg", "gpl")),
+    ("cng", ("cng", "erdgas", "zemní plyn", "zemni plyn")),
+    ("petrol", ("benzín", "benzin", "petrol", "gasoline", "tsi", "tfsi", "gti")),
+)
+
 # Pohon podle modelu (kdyz z textu nic): konstrukcni dany.
 _MODEL_DEFAULT_DRIVETRAIN = {
     "bmw_130i": "rwd",
@@ -47,6 +57,16 @@ def parse_drivetrain(text: str | None, model: str | None = None) -> str | None:
             return "fwd"
     if model:
         return _MODEL_DEFAULT_DRIVETRAIN.get(model)
+    return None
+
+
+def parse_fuel(text: str | None) -> str | None:
+    if not text:
+        return None
+    low = text.lower()
+    for fuel, hints in _FUEL_HINTS:
+        if any(h in low for h in hints):
+            return fuel
     return None
 
 
@@ -93,6 +113,7 @@ def normalize(raw: RawListing, model: str, generation: str) -> dict:
             raw.transmission_text or raw.title
         ),
         "drivetrain": parse_drivetrain(raw.drivetrain_text or raw.title, model),
+        "fuel_type": parse_fuel(raw.fuel_text or raw.title),
         "price_czk": price_czk,
         "price_original": price_original,
         "currency": raw.currency.upper(),

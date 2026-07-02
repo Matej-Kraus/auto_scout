@@ -16,6 +16,7 @@ class ListingOut(BaseModel):
     mileage_km: int | None
     transmission: str | None
     drivetrain: str | None
+    fuel_type: str | None
     price_czk: int
     currency: str
     url: str

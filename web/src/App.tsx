@@ -5,6 +5,7 @@ import {
   czk,
   dealTier,
   drivetrainLabel,
+  fuelLabel,
   km,
   modelLabel,
   pct,
@@ -12,11 +13,25 @@ import {
   timeAgo,
   transmissionLabel,
 } from "./format";
-import { applySearch, EMPTY_SEARCH, type SearchState } from "./search";
+import {
+  applySearch,
+  clusterListings,
+  type Cluster,
+  EMPTY_SEARCH,
+  isSearchActive,
+  type SearchState,
+} from "./search";
 import type { Listing, Status } from "./types";
 
 const MODELS = ["bmw_130i", "audi_s3", "golf_gti"];
 const PRICE_STEPS = [200_000, 250_000, 300_000, 400_000];
+const FUELS = ["petrol", "diesel", "hybrid", "electric"];
+
+function yearOptions(min: number, max: number): number[] {
+  const out: number[] = [];
+  for (let y = max; y >= min; y--) out.push(y);
+  return out;
+}
 
 export function App() {
   const [listings, setListings] = useState<Listing[] | null>(null);
@@ -38,11 +53,19 @@ export function App() {
     fetchStatus().then(setStatus).catch(() => {});
   }, []);
 
-  // Zdroje pro filtr (dynamicky z dat).
+  // Zdroje + paliva pro filtr (dynamicky z dat).
   const sources = useMemo(
     () => Array.from(new Set((listings ?? []).map((l) => l.source))).sort(),
     [listings],
   );
+  const fuels = useMemo(
+    () => FUELS.filter((f) => (listings ?? []).some((l) => l.fuel_type === f)),
+    [listings],
+  );
+  const years = useMemo(() => {
+    const ys = (listings ?? []).map((l) => l.year).filter((y): y is number => y != null);
+    return ys.length ? { min: Math.min(...ys), max: Math.max(...ys) } : null;
+  }, [listings]);
 
   // Vyhledávání + filtry běží client-side nad staženými inzeráty (okamžitá odezva).
   const matched = useMemo(
@@ -50,18 +73,28 @@ export function App() {
     [listings, search],
   );
 
-  const hero = useMemo(
-    () => matched?.find((l) => l.deal_score != null) ?? null,
-    [matched],
+  // Sloučení stejného auta z víc bazarů (dedupe) → clustery seřazené podle skóre.
+  const clusters = useMemo<Cluster[] | null>(() => {
+    if (matched == null) return null;
+    if (!search.dedupe) return matched.map((l) => ({ primary: l, duplicates: [] }));
+    return clusterListings(matched);
+  }, [matched, search.dedupe]);
+
+  const heroCluster = useMemo(
+    () => clusters?.find((c) => c.primary.deal_score != null) ?? null,
+    [clusters],
   );
-  const rest = useMemo(
-    () => (hero ? matched?.filter((l) => l.id !== hero.id) ?? [] : matched ?? []),
-    [matched, hero],
+  const restClusters = useMemo(
+    () =>
+      heroCluster
+        ? clusters?.filter((c) => c.primary.id !== heroCluster.primary.id) ?? []
+        : clusters ?? [],
+    [clusters, heroCluster],
   );
 
-  const hotCount = matched?.filter((l) => dealTier(l.deal_score) === "hot").length ?? 0;
-  const searchActive =
-    search.query.trim() !== "" || search.manualOnly || search.maxPrice != null || search.source != null;
+  const hotCount =
+    clusters?.filter((c) => dealTier(c.primary.deal_score) === "hot").length ?? 0;
+  const searchActive = isSearchActive(search);
 
   return (
     <div className="shell">
@@ -80,7 +113,7 @@ export function App() {
             "SCAN…"
           ) : (
             <>
-              <b>{matched.length}</b> nalezeno ·{" "}
+              <b>{clusters?.length ?? matched.length}</b> aut ·{" "}
               <b style={{ color: "var(--hot)" }}>{hotCount}</b> hot
               <br />
               {status?.last_run
@@ -158,6 +191,66 @@ export function App() {
           ))}
       </div>
 
+      {(fuels.length > 0 || years) && (
+        <div className="controls">
+          <span className="lbl">Palivo · rok</span>
+          {fuels.map((f) => (
+            <button
+              key={f}
+              className={`pill ${search.fuel === f ? "active" : ""}`}
+              onClick={() => setSearch((s) => ({ ...s, fuel: s.fuel === f ? null : f }))}
+            >
+              {fuelLabel(f)}
+            </button>
+          ))}
+          {years && (
+            <>
+              <select
+                className="yearsel"
+                value={search.yearFrom ?? ""}
+                onChange={(e) =>
+                  setSearch((s) => ({
+                    ...s,
+                    yearFrom: e.target.value ? Number(e.target.value) : null,
+                  }))
+                }
+              >
+                <option value="">rok od</option>
+                {yearOptions(years.min, years.max).map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="yearsel"
+                value={search.yearTo ?? ""}
+                onChange={(e) =>
+                  setSearch((s) => ({
+                    ...s,
+                    yearTo: e.target.value ? Number(e.target.value) : null,
+                  }))
+                }
+              >
+                <option value="">rok do</option>
+                {yearOptions(years.min, years.max).map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
+          <button
+            className={`pill ${search.dedupe ? "active" : ""}`}
+            title="Sloučit stejné auto nabízené na víc bazarech do jednoho"
+            onClick={() => setSearch((s) => ({ ...s, dedupe: !s.dedupe }))}
+          >
+            ⛓ Sloučit duplicity
+          </button>
+        </div>
+      )}
+
       {error && <div className="state">CHYBA: {error}. Běží FastAPI na :8000?</div>}
 
       {!error && listings == null && (
@@ -185,24 +278,29 @@ export function App() {
         </div>
       )}
 
-      {hero && (
-        <HeroCard listing={hero} onOpen={() => setOpenId(hero.id)} />
+      {heroCluster && (
+        <HeroCard
+          listing={heroCluster.primary}
+          duplicates={heroCluster.duplicates}
+          onOpen={() => setOpenId(heroCluster.primary.id)}
+        />
       )}
 
-      {matched != null && matched.length > 0 && (
+      {clusters != null && clusters.length > 0 && (
         <>
           <div className="section-head">
             <h3>{searchActive ? "Výsledky hledání" : "Žebříček dealů"}</h3>
             <span className="count">SEŘAZENO DLE SKÓRE ▾</span>
           </div>
           <div className="grid">
-            {rest.map((l, i) => (
+            {restClusters.map((c, i) => (
               <DealRow
-                key={l.id}
-                listing={l}
-                rank={i + (hero ? 2 : 1)}
+                key={c.primary.id}
+                listing={c.primary}
+                duplicates={c.duplicates}
+                rank={i + (heroCluster ? 2 : 1)}
                 delay={i * 0.03}
-                onOpen={() => setOpenId(l.id)}
+                onOpen={() => setOpenId(c.primary.id)}
               />
             ))}
           </div>
@@ -245,7 +343,24 @@ function Gauge({ score }: { score: number }) {
   );
 }
 
-function HeroCard({ listing, onOpen }: { listing: Listing; onOpen: () => void }) {
+function AlsoOn({ duplicates }: { duplicates: Listing[] }) {
+  if (duplicates.length === 0) return null;
+  return (
+    <span className="alsoon" title="Stejné auto nalezené i na těchto bazarech">
+      také na {duplicates.map((d) => sourceLabel(d.source)).join(", ")}
+    </span>
+  );
+}
+
+function HeroCard({
+  listing,
+  duplicates,
+  onOpen,
+}: {
+  listing: Listing;
+  duplicates: Listing[];
+  onOpen: () => void;
+}) {
   const below = pct(listing.pct_below);
   return (
     <div className="hero" onClick={onOpen} role="button">
@@ -260,8 +375,14 @@ function HeroCard({ listing, onOpen }: { listing: Listing; onOpen: () => void })
           <span>{km(listing.mileage_km)}</span>
           <span>{transmissionLabel(listing.transmission)}</span>
           <span>{drivetrainLabel(listing.drivetrain)}</span>
+          <span>{fuelLabel(listing.fuel_type)}</span>
           <span>· {timeAgo(listing.first_seen)}</span>
         </div>
+        {duplicates.length > 0 && (
+          <div style={{ marginTop: 6 }}>
+            <AlsoOn duplicates={duplicates} />
+          </div>
+        )}
         <div className="price">
           {czk(listing.price_czk)}
           {below != null && below > 0 && (
@@ -281,11 +402,13 @@ function HeroCard({ listing, onOpen }: { listing: Listing; onOpen: () => void })
 
 function DealRow({
   listing,
+  duplicates,
   rank,
   delay,
   onOpen,
 }: {
   listing: Listing;
+  duplicates: Listing[];
   rank: number;
   delay: number;
   onOpen: () => void;
@@ -312,8 +435,10 @@ function DealRow({
             <span>{sourceLabel(listing.source)}</span>
             <span>{listing.year ?? "—"}</span>
             <span>{km(listing.mileage_km)}</span>
+            {listing.fuel_type && <span>{fuelLabel(listing.fuel_type)}</span>}
             <span>{timeAgo(listing.first_seen)}</span>
           </div>
+          <AlsoOn duplicates={duplicates} />
         </div>
       </div>
       <div className="tags">

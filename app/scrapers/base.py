@@ -39,6 +39,7 @@ class RawListing:
     mileage_km: int | None = None
     transmission_text: str | None = None  # syrovy text prevodovky
     drivetrain_text: str | None = None  # syrovy text pohonu
+    fuel_text: str | None = None  # syrovy text paliva (napr. "Benzín" / "Diesel")
     image_url: str | None = None  # nahledovy obrazek (prvni foto)
     raw: dict = field(default_factory=dict)  # cela odpoved pro pripadny dalsi parsing
 

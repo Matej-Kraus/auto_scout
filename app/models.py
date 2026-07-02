@@ -39,6 +39,9 @@ class Listing(Base):
     mileage_km: Mapped[int | None] = mapped_column(Integer, nullable=True)
     transmission: Mapped[str | None] = mapped_column(String(16), nullable=True)  # manual | auto
     drivetrain: Mapped[str | None] = mapped_column(String(16), nullable=True)  # rwd | awd | fwd
+    fuel_type: Mapped[str | None] = mapped_column(
+        String(16), nullable=True
+    )  # petrol | diesel | hybrid | electric | lpg | cng
 
     price_czk: Mapped[int] = mapped_column(Integer)
     price_original: Mapped[int] = mapped_column(Integer)

@@ -115,6 +115,7 @@ class SautoScraper(Scraper):
             return None  # poptavka / cena dohodou — preskoc
 
         gearbox = (item.get("gearbox_cb") or {}).get("name")
+        fuel = (item.get("fuel_cb") or {}).get("name")
         return RawListing(
             source=self.name,
             source_id=str(item["id"]),
@@ -126,6 +127,7 @@ class SautoScraper(Scraper):
             mileage_km=item.get("tachometer"),
             transmission_text=gearbox,
             drivetrain_text=name,  # pohon Sauto v zakladu nedava → odvodi se z nazvu/modelu
+            fuel_text=fuel,
             image_url=_first_image(item),
             raw=item,
         )

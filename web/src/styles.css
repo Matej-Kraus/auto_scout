@@ -702,3 +702,34 @@ body::after {
   margin: 10px 0 4px;
   border: 1px solid var(--line);
 }
+
+/* ---------- také na (cross-portal dedup) + year select ---------- */
+.alsoon {
+  display: inline-block;
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--steel);
+  border: 1px solid rgba(74, 158, 255, 0.35);
+  border-radius: 5px;
+  padding: 2px 7px;
+}
+.yearsel {
+  font-family: var(--cond);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 8px 12px;
+  border: 1px solid var(--line-bright);
+  background: var(--bg-raised);
+  color: var(--text-dim);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.yearsel:hover {
+  border-color: var(--amber);
+  color: var(--text);
+}

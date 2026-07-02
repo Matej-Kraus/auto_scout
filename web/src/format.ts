@@ -20,6 +20,16 @@ export const transmissionLabel = (t: string | null) =>
 
 export const drivetrainLabel = (d: string | null) => (d ? d.toUpperCase() : "—");
 
+const FUEL_LABELS: Record<string, string> = {
+  petrol: "Benzín",
+  diesel: "Diesel",
+  hybrid: "Hybrid",
+  electric: "Elektro",
+  lpg: "LPG",
+  cng: "CNG",
+};
+export const fuelLabel = (f: string | null) => (f ? FUEL_LABELS[f] ?? f : "—");
+
 export const sourceLabel = (s: string) =>
   ({ sauto: "SAUTO", sbazar: "SBAZAR", autoscout24: "AS24", mobilede: "MOBILE.DE" })[s] ??
   s.toUpperCase();

@@ -28,8 +28,9 @@ def test_autoscout24_parses_and_filters_by_name():
     assert r.currency == "EUR"
     assert r.year == 2010
     assert r.mileage_km == 145000
-    assert r.transmission_text == "Manual"
-    assert r.url.startswith("https://www.autoscout24.cz/")
+    assert r.transmission_text == "Schaltgetriebe"
+    assert r.image_url is not None
+    assert r.url.startswith("https://www.autoscout24.de/")
 
 
 def test_autoscout24_raises_on_broken_structure():

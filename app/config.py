@@ -2,10 +2,53 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine.url import make_url
+
+logger = logging.getLogger(__name__)
+
+_SQLITE_FALLBACK = "sqlite:///local.db"
+
+
+def normalize_db_url(v: object) -> str:
+    """Zrobustní DATABASE_URL: opraví běžné chyby v Neon stringu a nikdy nespadne.
+
+    Řeší nejčastější pasti (proto padal cron):
+    - prázdná / nenastavená hodnota (Actions bez secretu) → SQLite
+    - obalující uvozovky   "postgresql://…"  → oříznou
+    - prefix z Neon tlačítka  psql 'postgresql://…'  → odstraní
+    - schéma postgres:// / postgresql:// → povýší na +psycopg (nainstalovaný driver)
+    - cokoli, co pak stejně nejde naparsovat → SQLite fallback (+ hlasitý warning),
+      ať pipeline běží a pošle notifikace místo pádu celého workflow.
+    """
+    if not isinstance(v, str) or not v.strip():
+        return _SQLITE_FALLBACK
+
+    s = v.strip()
+    if s.lower().startswith("psql "):
+        s = s[5:].strip()
+    s = s.strip("'").strip('"').strip()
+
+    if s.startswith("postgresql://"):
+        s = "postgresql+psycopg://" + s[len("postgresql://"):]
+    elif s.startswith("postgres://"):
+        s = "postgresql+psycopg://" + s[len("postgres://"):]
+
+    try:
+        make_url(s)
+    except Exception:  # noqa: BLE001 — radeji SQLite nez shodit cely beh
+        logger.error(
+            "DATABASE_URL nejde naparsovat (%r…) → docasny fallback na SQLite. "
+            "Zkontroluj secret: ma byt 'postgresql+psycopg://user:pass@host/db?sslmode=require', "
+            "bez uvozovek a bez 'psql ' na zacatku.",
+            s[:25],
+        )
+        return _SQLITE_FALLBACK
+    return s
 
 
 class Settings(BaseSettings):
@@ -40,13 +83,8 @@ class Settings(BaseSettings):
 
     @field_validator("database_url", mode="before")
     @classmethod
-    def _empty_db_url_to_sqlite(cls, v: object) -> object:
-        # GitHub Actions dosadi za nenastaveny `${{ secrets.DATABASE_URL }}`
-        # prazdny string, ktery by jinak prebil default a shodil create_engine("").
-        # Prazdne / jen-bile-znaky => fallback na lokalni SQLite.
-        if v is None or (isinstance(v, str) and not v.strip()):
-            return "sqlite:///local.db"
-        return v
+    def _normalize_db_url(cls, v: object) -> object:
+        return normalize_db_url(v)
 
 
 settings = Settings()
@@ -109,6 +147,15 @@ WATCHES: list[Watch] = [
                 "price_from": 100_000,
                 "price_to": 450_000,
             },
+            "autoscout24": {
+                "make_slug": "bmw",
+                "model_slug": "1er",
+                "name_includes": ["130i"],
+                "year_from": 2005,
+                "year_to": 2013,
+                "price_to": 18_000,  # EUR
+                "power_from_kw": 180,  # 130i ~195 kW; zúží na silné 1er
+            },
         },
     ),
     Watch(
@@ -133,6 +180,14 @@ WATCHES: list[Watch] = [
                 "price_from": 100_000,
                 "price_to": 450_000,
             },
+            "autoscout24": {
+                "make_slug": "audi",
+                "model_slug": "s3",
+                "name_includes": ["s3"],
+                "year_from": 2006,
+                "year_to": 2013,
+                "price_to": 18_000,  # EUR
+            },
         },
     ),
     Watch(
@@ -156,6 +211,14 @@ WATCHES: list[Watch] = [
                 "year_to": 2020,
                 "price_from": 150_000,
                 "price_to": 450_000,
+            },
+            "autoscout24": {
+                "make_slug": "volkswagen",
+                "model_slug": "golf-gti",  # vlastni slug jen pro GTI varianty
+                "name_includes": ["gti"],
+                "year_from": 2012,
+                "year_to": 2020,
+                "price_to": 18_000,  # EUR
             },
         },
     ),

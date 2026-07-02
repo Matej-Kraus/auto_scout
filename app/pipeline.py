@@ -91,7 +91,16 @@ def _upsert(session: Session, raw: RawListing, watch: Watch):
     existing.last_seen = now
     existing.is_active = True
     # aktualizuj mutovatelne atributy (titulek/km muze portal upravit)
-    for fld in ("year", "mileage_km", "transmission", "drivetrain", "title", "url", "image_url"):
+    for fld in (
+        "year",
+        "mileage_km",
+        "transmission",
+        "drivetrain",
+        "fuel_type",
+        "title",
+        "url",
+        "image_url",
+    ):
         setattr(existing, fld, data[fld])
 
     change = "seen"

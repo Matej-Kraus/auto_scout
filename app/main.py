@@ -63,6 +63,7 @@ def _to_out(lst: Listing, score) -> ListingOut:
         mileage_km=lst.mileage_km,
         transmission=lst.transmission,
         drivetrain=lst.drivetrain,
+        fuel_type=lst.fuel_type,
         price_czk=lst.price_czk,
         currency=lst.currency,
         url=lst.url,

@@ -7,6 +7,7 @@ export interface Listing {
   mileage_km: number | null;
   transmission: string | null;
   drivetrain: string | null;
+  fuel_type: string | null;
   price_czk: number;
   currency: string;
   url: string;

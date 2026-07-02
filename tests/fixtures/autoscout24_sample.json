@@ -1,30 +1,41 @@
 {
+  "numberOfResults": 2,
+  "numberOfPages": 1,
   "listings": [
     {
       "id": "abc-123",
-      "url": "/inzerat/audi-s3-abc-123",
+      "url": "/offers/audi-s3-2-0-tfsi-quattro/abc-123",
       "vehicle": {
         "make": "Audi",
         "model": "S3",
-        "modelVersionInput": "2.0 TFSI quattro",
-        "mileageInKmRaw": 145000,
-        "firstRegistrationDateRaw": "06-2010",
-        "transmissionType": "Manual"
+        "modelVersionInput": "2.0 TFSI quattro"
       },
-      "price": { "priceRaw": 14900 }
+      "price": { "priceRaw": 14900, "priceFormatted": "€ 14.900" },
+      "tracking": { "mileage": "145000", "firstRegistration": "06-2010" },
+      "vehicleDetails": [
+        { "data": "145.000 km", "iconName": "mileage_odometer" },
+        { "data": "Schaltgetriebe", "iconName": "gearbox" },
+        { "data": "06/2010", "iconName": "calendar" }
+      ],
+      "images": [
+        "https://prod.pictures.autoscout24.net/listing-images/abc-123_01.jpg/250x188.webp"
+      ]
     },
     {
       "id": "def-456",
-      "url": "/inzerat/audi-a3-def-456",
+      "url": "/offers/audi-a3-1-6-tdi/def-456",
       "vehicle": {
         "make": "Audi",
         "model": "A3",
-        "modelVersionInput": "1.6 TDI",
-        "mileageInKmRaw": 160000,
-        "firstRegistrationDateRaw": "03-2011",
-        "transmissionType": "Manual"
+        "modelVersionInput": "1.6 TDI"
       },
-      "price": { "priceRaw": 9900 }
+      "price": { "priceRaw": 9900 },
+      "tracking": { "mileage": "180000", "firstRegistration": "03-2011" },
+      "vehicleDetails": [
+        { "data": "180.000 km", "iconName": "mileage_odometer" },
+        { "data": "Schaltgetriebe", "iconName": "gearbox" }
+      ],
+      "images": []
     }
   ]
 }

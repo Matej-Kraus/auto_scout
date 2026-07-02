@@ -30,6 +30,14 @@ class MobileDeScraper(Scraper):
         if not query.params:
             logger.info("mobilede[%s]: bez portal_params, preskakuji", query.model)
             return []
+        from app.config import settings
+
+        if not settings.scraper_proxy_url:
+            # Overeno 7/2026: Akamai blokuje i lokalni headless Chromium
+            # ("Zugriff verweigert") i m.mobile.de API (403). Bez residential
+            # proxy nema smysl to zkouset — jen by chodily failure alerty.
+            logger.info("mobilede[%s]: preskakuji, chybi SCRAPER_PROXY_URL (Akamai)", query.model)
+            return []
         try:
             from playwright.sync_api import sync_playwright
         except ImportError:
@@ -38,7 +46,11 @@ class MobileDeScraper(Scraper):
 
         url = _build_search_url(query)
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=True)
+            browser = pw.chromium.launch(
+                headless=True,
+                proxy={"server": settings.scraper_proxy_url},
+                args=["--disable-blink-features=AutomationControlled"],
+            )
             try:
                 page = browser.new_page(
                     user_agent=(

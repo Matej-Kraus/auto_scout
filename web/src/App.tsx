@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { addWatch, deleteWatch, fetchListings, fetchStatus, fetchWatches } from "./api";
+import {
+  addWatch,
+  type CatalogMake,
+  deleteWatch,
+  fetchListings,
+  fetchMakes,
+  fetchModels,
+  fetchStatus,
+  fetchWatches,
+} from "./api";
 import { Drawer } from "./Drawer";
 import {
   czk,
@@ -379,7 +388,10 @@ export function App() {
 }
 
 function AddWatchForm({ onAdded }: { onAdded: (w: Watch) => void }) {
-  const [make, setMake] = useState("");
+  const [makes, setMakes] = useState<CatalogMake[]>([]);
+  const [topIds, setTopIds] = useState<number[]>([]);
+  const [models, setModels] = useState<CatalogMake[] | null>(null); // null = nenačteno
+  const [makeId, setMakeId] = useState<number | "">("");
   const [model, setModel] = useState("");
   const [variant, setVariant] = useState("");
   const [yearFrom, setYearFrom] = useState("");
@@ -388,13 +400,39 @@ function AddWatchForm({ onAdded }: { onAdded: (w: Watch) => void }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  useEffect(() => {
+    fetchMakes()
+      .then((d) => {
+        setMakes(d.makes);
+        setTopIds(d.top_make_ids);
+      })
+      .catch(() => setErr("Katalog značek se nenačetl — zkus obnovit stránku."));
+  }, []);
+
+  // Po výběru značky natáhni její modely.
+  useEffect(() => {
+    setModel("");
+    setModels(null);
+    if (makeId === "") return;
+    fetchModels(makeId)
+      .then(setModels)
+      .catch(() => setModels([])); // katalog nedostupný → ruční zadání
+  }, [makeId]);
+
+  const makeName = makes.find((m) => m.id === makeId)?.name ?? "";
+  const topMakes = topIds
+    .map((id) => makes.find((m) => m.id === id))
+    .filter((m): m is CatalogMake => !!m);
+  const restMakes = makes.filter((m) => !topIds.includes(m.id));
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (!makeName || !model) return;
     setErr(null);
     setBusy(true);
     try {
       const w = await addWatch({
-        make,
+        make: makeName,
         model,
         variant,
         year_from: yearFrom ? Number(yearFrom) : null,
@@ -411,20 +449,57 @@ function AddWatchForm({ onAdded }: { onAdded: (w: Watch) => void }) {
 
   return (
     <form className="addform" onSubmit={submit}>
-      <input
+      <select
         required
-        placeholder="Značka * (Škoda)"
-        value={make}
-        onChange={(e) => setMake(e.target.value)}
-      />
+        value={makeId}
+        onChange={(e) => setMakeId(e.target.value ? Number(e.target.value) : "")}
+      >
+        <option value="">Značka *</option>
+        {topMakes.length > 0 && (
+          <optgroup label="Nejčastější">
+            {topMakes.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </optgroup>
+        )}
+        <optgroup label="Všechny značky">
+          {restMakes.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.name}
+            </option>
+          ))}
+        </optgroup>
+      </select>
+
+      {models && models.length > 0 ? (
+        <select required value={model} onChange={(e) => setModel(e.target.value)}>
+          <option value="">Model *</option>
+          {models.map((m) => (
+            <option key={m.id} value={m.name}>
+              {m.name}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <input
+          required
+          placeholder={
+            makeId === ""
+              ? "Model * (nejdřív vyber značku)"
+              : models === null
+                ? "Načítám modely…"
+                : "Model * (napiš ručně)"
+          }
+          disabled={makeId === "" || models === null}
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+        />
+      )}
+
       <input
-        required
-        placeholder="Model * (Octavia)"
-        value={model}
-        onChange={(e) => setModel(e.target.value)}
-      />
-      <input
-        placeholder="Varianta (RS)"
+        placeholder="Upřesnění (RS, GTI, quattro…)"
         value={variant}
         onChange={(e) => setVariant(e.target.value)}
       />
@@ -446,7 +521,7 @@ function AddWatchForm({ onAdded }: { onAdded: (w: Watch) => void }) {
         value={priceTo}
         onChange={(e) => setPriceTo(e.target.value)}
       />
-      <button className="pill pill-add" type="submit" disabled={busy}>
+      <button className="pill pill-add" type="submit" disabled={busy || !makeName || !model}>
         {busy ? "Přidávám…" : "Hlídat a prohledat"}
       </button>
       {err && <div className="addform-err">{err}</div>}

@@ -30,6 +30,9 @@ SEARCH_URL = "https://www.sbazar.cz/api/v1/items/search"
 PER_PAGE = 100
 MAX_PAGES = 6  # phrase uz vyrazne zuzi; nehltej cely bazar
 DELAY_RANGE = (2.0, 5.0)
+# Pojistka proti spatne zarazenym nahradnim dilum: cele pojizdne auto na Sbazaru
+# nestoji 300 Kc. Plati jen kdyz watch nema vlastni price_from.
+DEFAULT_MIN_PRICE_CZK = 30_000
 
 _HEADERS = {
     "User-Agent": (
@@ -129,7 +132,8 @@ class SbazarScraper(Scraper):
         price = item.get("price")
         if not price or item.get("price_by_agreement"):
             return None  # cena dohodou / poptavka
-        if params.get("price_from") and price < params["price_from"]:
+        min_price = params.get("price_from") or DEFAULT_MIN_PRICE_CZK
+        if price < min_price:
             return None
         if params.get("price_to") and price > params["price_to"]:
             return None

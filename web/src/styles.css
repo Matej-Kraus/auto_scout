@@ -285,7 +285,8 @@ body::after {
   gap: 8px;
   padding: 14px 2px 4px;
 }
-.addform input {
+.addform input,
+.addform select {
   background: var(--bg);
   border: 1px solid var(--line-bright);
   border-radius: 10px;
@@ -295,8 +296,12 @@ body::after {
   padding: 10px 12px;
   outline: none;
 }
-.addform input:focus {
+.addform input:focus,
+.addform select:focus {
   border-color: var(--amber);
+}
+.addform input:disabled {
+  opacity: 0.5;
 }
 .addform input::placeholder {
   color: var(--text-faint);

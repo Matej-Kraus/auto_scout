@@ -179,6 +179,26 @@ def _count_active(session, model_key: str) -> int:
     )
 
 
+@app.get("/api/catalog/makes")
+def catalog_makes() -> dict:
+    """Seznam značek pro výběr ve formuláři (statický snapshot)."""
+    from app.catalog import get_makes
+
+    return get_makes()
+
+
+@app.get("/api/catalog/models/{make_id}")
+def catalog_models(make_id: int) -> list[dict]:
+    """Modely dané značky (živě z AS24 taxonomie, cache na den)."""
+    from app.catalog import get_models
+
+    try:
+        return get_models(make_id)
+    except Exception as exc:  # noqa: BLE001 — katalog neni kriticky
+        logger.warning("catalog models %s selhal: %s", make_id, exc)
+        raise HTTPException(status_code=502, detail="Katalog modelů je nedostupný") from exc
+
+
 @app.get("/api/watches", response_model=list[WatchOut])
 def list_watches() -> list[WatchOut]:
     """Vsechna hlidana auta: kuratorska z config.py + uzivatelska z DB."""

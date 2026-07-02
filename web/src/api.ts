@@ -50,3 +50,20 @@ export async function deleteWatch(id: number, purge = true): Promise<void> {
   const res = await fetch(`${BASE}/api/watches/${id}?purge=${purge}`, { method: "DELETE" });
   if (!res.ok) throw new Error(`API ${res.status}`);
 }
+
+export interface CatalogMake {
+  id: number;
+  name: string;
+}
+
+export async function fetchMakes(): Promise<{ top_make_ids: number[]; makes: CatalogMake[] }> {
+  const res = await fetch(`${BASE}/api/catalog/makes`);
+  if (!res.ok) throw new Error(`API ${res.status}`);
+  return res.json();
+}
+
+export async function fetchModels(makeId: number): Promise<CatalogMake[]> {
+  const res = await fetch(`${BASE}/api/catalog/models/${makeId}`);
+  if (!res.ok) throw new Error(`API ${res.status}`);
+  return res.json();
+}

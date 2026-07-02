@@ -72,6 +72,9 @@ class Settings(BaseSettings):
     email_to: str = ""
     # Lokalne za firemni TLS proxy nastav SSL_VERIFY=false (jinak nech true).
     ssl_verify: bool = True
+    # Residential proxy pro tvrde chranene portaly (mobile.de = Akamai).
+    # Format: http://user:pass@host:port — bez ni se mobile.de preskakuje.
+    scraper_proxy_url: str = ""
     # Retence: PriceHistory starsi nez tolik dni se prune (krome posledniho zaznamu).
     retention_days: int = 120
 

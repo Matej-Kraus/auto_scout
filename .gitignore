@@ -11,7 +11,7 @@ venv/
 .env
 
 # DB
-local.db
+local.db*
 *.sqlite
 *.sqlite3
 

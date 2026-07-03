@@ -160,6 +160,13 @@ WATCHES: list[Watch] = [
                 "price_to": 18_000,  # EUR
                 "power_from_kw": 180,  # 130i ~195 kW; zúží na silné 1er
             },
+            "kleinanzeigen": {
+                "search_slug": "bmw-130i",
+                "name_includes": ["130i"],
+                "year_from": 2005,
+                "year_to": 2013,
+                "price_to": 18_000,  # EUR
+            },
         },
     ),
     Watch(
@@ -193,6 +200,13 @@ WATCHES: list[Watch] = [
                 "year_to": 2013,
                 "price_to": 18_000,  # EUR
             },
+            "kleinanzeigen": {
+                "search_slug": "audi-s3",
+                "name_includes": ["s3"],
+                "year_from": 2006,
+                "year_to": 2013,
+                "price_to": 18_000,  # EUR
+            },
         },
     ),
     Watch(
@@ -221,6 +235,13 @@ WATCHES: list[Watch] = [
             "autoscout24": {
                 "make_slug": "volkswagen",
                 "model_slug": "golf-gti",  # vlastni slug jen pro GTI varianty
+                "name_includes": ["gti"],
+                "year_from": 2012,
+                "year_to": 2020,
+                "price_to": 18_000,  # EUR
+            },
+            "kleinanzeigen": {
+                "search_slug": "volkswagen-golf-gti",
                 "name_includes": ["gti"],
                 "year_from": 2012,
                 "year_to": 2020,

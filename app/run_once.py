@@ -37,6 +37,12 @@ def build_scrapers() -> list:
     except Exception:  # noqa: BLE001
         logger.warning("AutoScout24 scraper se nenacetl, preskakuji", exc_info=True)
     try:
+        from app.scrapers.kleinanzeigen import KleinanzeigenScraper
+
+        scrapers.append(KleinanzeigenScraper())
+    except Exception:  # noqa: BLE001
+        logger.warning("Kleinanzeigen scraper se nenacetl, preskakuji", exc_info=True)
+    try:
         from app.scrapers.mobilede import MobileDeScraper
 
         scrapers.append(MobileDeScraper())

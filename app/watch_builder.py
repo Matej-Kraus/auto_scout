@@ -95,6 +95,7 @@ def build_watch(row: WatchRow) -> Watch:
     }
     as24_make, as24_model = _as24_slugs(make, model)
     as24: dict = {"make_slug": as24_make, "model_slug": as24_model}
+    ka: dict = {"search_slug": slugify(" ".join(x for x in (make, model, variant) if x))}
 
     for params in (sauto, sbazar):
         if name_tokens:
@@ -108,19 +109,27 @@ def build_watch(row: WatchRow) -> Watch:
         if row.price_to_czk:
             params["price_to"] = row.price_to_czk
 
-    if name_tokens:
-        as24["name_includes"] = name_tokens
-    if row.year_from:
-        as24["year_from"] = row.year_from
-    if row.year_to:
-        as24["year_to"] = row.year_to
-    if row.price_to_czk:
-        as24["price_to"] = int(row.price_to_czk / _APPROX_CZK_PER_EUR)
+    for de_params in (as24, ka):
+        if name_tokens:
+            de_params["name_includes"] = name_tokens
+        if row.year_from:
+            de_params["year_from"] = row.year_from
+        if row.year_to:
+            de_params["year_to"] = row.year_to
+        if row.price_to_czk:
+            de_params["price_to"] = int(row.price_to_czk / _APPROX_CZK_PER_EUR)
+    if row.price_from_czk:
+        ka["price_from"] = int(row.price_from_czk / _APPROX_CZK_PER_EUR)
 
     label = " ".join(x for x in (make, model, variant) if x)
     return Watch(
         model=row.model_key,
         generation=generation,
         label=label,
-        portal_params={"sauto": sauto, "sbazar": sbazar, "autoscout24": as24},
+        portal_params={
+            "sauto": sauto,
+            "sbazar": sbazar,
+            "autoscout24": as24,
+            "kleinanzeigen": ka,
+        },
     )

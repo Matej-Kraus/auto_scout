@@ -50,6 +50,7 @@ export function App() {
   const [search, setSearch] = useState<SearchState>(EMPTY_SEARCH);
   const [showAdd, setShowAdd] = useState(false);
   const [scanning, setScanning] = useState<string | null>(null); // model_key prave prohledavany
+  const [visibleCount, setVisibleCount] = useState(48);
 
   const loadListings = useCallback(() => {
     setListings(null);
@@ -88,6 +89,9 @@ export function App() {
     () => (listings ? applySearch(listings, search) : null),
     [listings, search],
   );
+
+  // Zmena hledani/filtru resetuje strankovani.
+  useEffect(() => setVisibleCount(48), [search, filter]);
   const clusters = useMemo<Cluster[] | null>(() => {
     if (matched == null) return null;
     if (!search.dedupe) return matched.map((l) => ({ primary: l, duplicates: [] }));
@@ -368,17 +372,27 @@ export function App() {
             <span className="count">SEŘAZENO DLE SKÓRE ▾</span>
           </div>
           <div className="cards">
-            {restClusters.map((c, i) => (
+            {restClusters.slice(0, visibleCount).map((c, i) => (
               <CarCard
                 key={c.primary.id}
                 listing={c.primary}
                 duplicates={c.duplicates}
                 rank={i + (heroCluster ? 2 : 1)}
-                delay={Math.min(i, 12) * 0.04}
+                delay={Math.min(i % 48, 12) * 0.04}
                 onOpen={() => setOpenId(c.primary.id)}
               />
             ))}
           </div>
+          {restClusters.length > visibleCount && (
+            <div className="loadmore">
+              <button
+                className="pill"
+                onClick={() => setVisibleCount((n) => n + 48)}
+              >
+                Načíst další ({restClusters.length - visibleCount} zbývá)
+              </button>
+            </div>
+          )}
         </>
       )}
 
@@ -504,14 +518,20 @@ function AddWatchForm({ onAdded }: { onAdded: (w: Watch) => void }) {
         onChange={(e) => setVariant(e.target.value)}
       />
       <input
-        placeholder="Rok od"
+        required
+        placeholder="Rok od * (např. 2013)"
         inputMode="numeric"
+        pattern="(19|20)\d{2}"
+        title="Rok 1980–2030 — jedna generace = smysluplné skóre vůči trhu"
         value={yearFrom}
         onChange={(e) => setYearFrom(e.target.value)}
       />
       <input
-        placeholder="Rok do"
+        required
+        placeholder="Rok do * (např. 2020)"
         inputMode="numeric"
+        pattern="(19|20)\d{2}"
+        title="Rok 1980–2030 — jedna generace = smysluplné skóre vůči trhu"
         value={yearTo}
         onChange={(e) => setYearTo(e.target.value)}
       />
@@ -521,6 +541,9 @@ function AddWatchForm({ onAdded }: { onAdded: (w: Watch) => void }) {
         value={priceTo}
         onChange={(e) => setPriceTo(e.target.value)}
       />
+      <div className="addform-hint">
+        Roky vymezují generaci — bez nich se do porovnání cen míchají stará a nová auta.
+      </div>
       <button className="pill pill-add" type="submit" disabled={busy || !makeName || !model}>
         {busy ? "Přidávám…" : "Hlídat a prohledat"}
       </button>

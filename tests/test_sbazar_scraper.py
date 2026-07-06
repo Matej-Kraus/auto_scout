@@ -83,7 +83,7 @@ def test_filters_to_matching_mk7_only():
     assert r.year == 2016
     assert r.mileage_km == 93804
     assert r.price == 380000
-    assert r.image_url == "https://d46-a.sdn.cz/x/a.jpeg"
+    assert r.image_url.startswith("https://d46-a.sdn.cz/x/a.jpeg?fl=")
     assert r.url == "https://www.sbazar.cz/inzerat/1"
 
 

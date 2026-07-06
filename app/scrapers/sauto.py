@@ -150,8 +150,13 @@ def _year_from_date(date_str: str | None) -> int | None:
         return None
 
 
+# Seznam CDN (sdn.cz) vraci na holou URL 401 — pusti jen konkretni whitelistovanou
+# transformaci s watermarkem (stejnou, jakou pouziva web Sauto).
+_SAUTO_IMG_FL = "?fl=exf|res,800,600,1|wrm,/watermark/sauto.png,10,10|jpg,80,,1"
+
+
 def _first_image(item: dict) -> str | None:
-    """Prvni nahledova fotka. Sauto vraci relativni '//d19-a.sdn.cz/...' → doplnime https:."""
+    """Prvni nahledova fotka jako verejne pristupna (podepsana) URL."""
     images = item.get("images") or []
     if not images:
         return None
@@ -159,8 +164,8 @@ def _first_image(item: dict) -> str | None:
     if not url:
         return None
     if url.startswith("//"):
-        return "https:" + url
-    return url
+        url = "https:" + url
+    return url + _SAUTO_IMG_FL
 
 
 def _detail_url(item: dict) -> str:

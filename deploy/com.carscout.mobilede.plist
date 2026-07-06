@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Denni mobile.de scrape z domaci (rezidencni) IP - jedina cesta pres Akamai.
+  Instalace (jednou):
+    cp deploy/com.carscout.mobilede.plist ~/Library/LaunchAgents/
+    launchctl load ~/Library/LaunchAgents/com.carscout.mobilede.plist
+  Log: /tmp/carscout-mobilede.log
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.carscout.mobilede</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <string>cd ~/Car_scout/auto_scout &amp;&amp; source .venv/bin/activate &amp;&amp; python -m scripts.run_mobilede_local</string>
+  </array>
+
+  <!-- 08:15 rano - bezny provoz, IP nevypada podezrele -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>8</integer>
+    <key>Minute</key>
+    <integer>15</integer>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/carscout-mobilede.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/carscout-mobilede.log</string>
+</dict>
+</plist>

@@ -22,6 +22,13 @@ import {
   transmissionLabel,
 } from "./format";
 import {
+  loadFavorites,
+  loadHidden,
+  saveFavorites,
+  saveHidden,
+  toggleIn,
+} from "./prefs";
+import {
   applySearch,
   clusterListings,
   type Cluster,
@@ -32,6 +39,7 @@ import {
 import type { Listing, Status, Watch } from "./types";
 
 const PRICE_STEPS = [200_000, 300_000, 400_000, 600_000];
+const KM_STEPS = [100_000, 150_000, 200_000];
 const FUELS = ["petrol", "diesel", "hybrid", "electric"];
 
 function yearOptions(min: number, max: number): number[] {
@@ -51,6 +59,23 @@ export function App() {
   const [showAdd, setShowAdd] = useState(false);
   const [scanning, setScanning] = useState<string | null>(null); // model_key prave prohledavany
   const [visibleCount, setVisibleCount] = useState(48);
+  const [favorites, setFavorites] = useState<Set<string>>(loadFavorites);
+  const [hidden, setHidden] = useState<Set<string>>(loadHidden);
+
+  const toggleFavorite = useCallback((url: string) => {
+    setFavorites((prev) => {
+      const next = toggleIn(prev, url);
+      saveFavorites(next);
+      return next;
+    });
+  }, []);
+  const toggleHidden = useCallback((url: string) => {
+    setHidden((prev) => {
+      const next = toggleIn(prev, url);
+      saveHidden(next);
+      return next;
+    });
+  }, []);
 
   const loadListings = useCallback(() => {
     setListings(null);
@@ -86,8 +111,13 @@ export function App() {
 
   // Fulltext + filtry client-side, pak slouceni stejneho auta z vic bazaru.
   const matched = useMemo(
-    () => (listings ? applySearch(listings, search) : null),
-    [listings, search],
+    () => (listings ? applySearch(listings, search, favorites, hidden) : null),
+    [listings, search, favorites, hidden],
+  );
+
+  const hiddenCount = useMemo(
+    () => (listings ?? []).filter((l) => hidden.has(l.url)).length,
+    [listings, hidden],
   );
 
   // Zmena hledani/filtru resetuje strankovani.
@@ -169,6 +199,12 @@ export function App() {
               <b style={{ color: "var(--hot)" }}>{hotCount}</b> hot
               <br />
               {status?.last_run ? `naposledy ${timeAgo(status.last_run)}` : " "}
+              {status?.median_days_to_sell != null && (
+                <>
+                  <br />
+                  prodej typicky za {status.median_days_to_sell} d
+                </>
+              )}
             </>
           )}
         </div>
@@ -253,6 +289,31 @@ export function App() {
               do {Math.round(p / 1000)}k
             </button>
           ))}
+          {KM_STEPS.map((k) => (
+            <button
+              key={k}
+              className={`pill ${search.maxKm === k ? "active" : ""}`}
+              onClick={() => setSearch((s) => ({ ...s, maxKm: s.maxKm === k ? null : k }))}
+            >
+              ≤{Math.round(k / 1000)}t km
+            </button>
+          ))}
+          <button
+            className={`pill ${search.favoritesOnly ? "active" : ""}`}
+            title="Jen auta označená hvězdičkou"
+            onClick={() => setSearch((s) => ({ ...s, favoritesOnly: !s.favoritesOnly }))}
+          >
+            ★ Oblíbené{favorites.size > 0 && <em>{favorites.size}</em>}
+          </button>
+          {hiddenCount > 0 && (
+            <button
+              className={`pill ${search.showHidden ? "active" : ""}`}
+              title="Zobrazit i skrytá auta"
+              onClick={() => setSearch((s) => ({ ...s, showHidden: !s.showHidden }))}
+            >
+              Skryté<em>{hiddenCount}</em>
+            </button>
+          )}
           {fuels.map((f) => (
             <button
               key={f}
@@ -361,6 +422,8 @@ export function App() {
         <HeroCard
           listing={heroCluster.primary}
           duplicates={heroCluster.duplicates}
+          isFav={favorites.has(heroCluster.primary.url)}
+          onFav={() => toggleFavorite(heroCluster.primary.url)}
           onOpen={() => setOpenId(heroCluster.primary.id)}
         />
       )}
@@ -379,6 +442,10 @@ export function App() {
                 duplicates={c.duplicates}
                 rank={i + (heroCluster ? 2 : 1)}
                 delay={Math.min(i % 48, 12) * 0.04}
+                isFav={favorites.has(c.primary.url)}
+                isHidden={hidden.has(c.primary.url)}
+                onFav={() => toggleFavorite(c.primary.url)}
+                onHide={() => toggleHidden(c.primary.url)}
                 onOpen={() => setOpenId(c.primary.id)}
               />
             ))}
@@ -594,15 +661,29 @@ function Gauge({ score }: { score: number }) {
 function HeroCard({
   listing,
   duplicates,
+  isFav,
+  onFav,
   onOpen,
 }: {
   listing: Listing;
   duplicates: Listing[];
+  isFav: boolean;
+  onFav: () => void;
   onOpen: () => void;
 }) {
   const below = pct(listing.pct_below);
   return (
     <div className="hero" onClick={onOpen} role="button">
+      <button
+        className={`starbtn hero-star ${isFav ? "on" : ""}`}
+        title={isFav ? "Odebrat z oblíbených" : "Přidat do oblíbených"}
+        onClick={(e) => {
+          e.stopPropagation();
+          onFav();
+        }}
+      >
+        {isFav ? "★" : "☆"}
+      </button>
       <div>
         <div className="tag">nejlepší deal teď · {sourceLabel(listing.source)}</div>
         {listing.image_url && (
@@ -650,12 +731,20 @@ function CarCard({
   duplicates,
   rank,
   delay,
+  isFav,
+  isHidden,
+  onFav,
+  onHide,
   onOpen,
 }: {
   listing: Listing;
   duplicates: Listing[];
   rank: number;
   delay: number;
+  isFav: boolean;
+  isHidden: boolean;
+  onFav: () => void;
+  onHide: () => void;
   onOpen: () => void;
 }) {
   const tier = dealTier(listing.deal_score);
@@ -671,9 +760,34 @@ function CarCard({
         {listing.image_url ? (
           <img src={listing.image_url} alt="" loading="lazy" />
         ) : (
-          <div className="card-noimg">bez foto</div>
+          <div className="card-noimg">
+            <CarSilhouette />
+            <span>foto na inzerátu</span>
+          </div>
         )}
         <span className="card-rank">{String(rank).padStart(2, "0")}</span>
+        <span className="card-actions">
+          <button
+            className={`starbtn ${isFav ? "on" : ""}`}
+            title={isFav ? "Odebrat z oblíbených" : "Přidat do oblíbených"}
+            onClick={(e) => {
+              e.stopPropagation();
+              onFav();
+            }}
+          >
+            {isFav ? "★" : "☆"}
+          </button>
+          <button
+            className="hidebtn"
+            title={isHidden ? "Zobrazit zpět" : "Skrýt (nezajímá mě)"}
+            onClick={(e) => {
+              e.stopPropagation();
+              onHide();
+            }}
+          >
+            {isHidden ? "↩" : "✕"}
+          </button>
+        </span>
         {listing.deal_score != null && (
           <span className={`card-score tier-${tier}`}>
             {Math.round(listing.deal_score * 100)}
@@ -709,5 +823,21 @@ function CarCard({
         </div>
       </div>
     </article>
+  );
+}
+
+function CarSilhouette() {
+  return (
+    <svg viewBox="0 0 120 48" width="86" height="34" aria-hidden="true">
+      <path
+        d="M8 34 C10 26 16 22 26 20 L38 12 C42 9 48 8 58 8 L74 8 C82 8 88 11 93 16 L99 21 C108 22 112 26 112 31 L112 34 L104 34 A8 8 0 0 0 88 34 L44 34 A8 8 0 0 0 28 34 L8 34 Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinejoin="round"
+      />
+      <circle cx="36" cy="34" r="5.5" fill="none" stroke="currentColor" strokeWidth="2.5" />
+      <circle cx="96" cy="34" r="5.5" fill="none" stroke="currentColor" strokeWidth="2.5" />
+    </svg>
   );
 }

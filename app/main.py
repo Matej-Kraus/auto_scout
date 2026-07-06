@@ -158,6 +158,16 @@ def status() -> StatusOut:
         last_alert = session.scalar(select(func.max(Alert.sent_at)))
         total = session.scalar(select(func.count(Listing.id))) or 0
 
+        # Jak rychle dobre kusy mizi: median dnu first_seen->last_seen u zmizelych.
+        gone = session.scalars(
+            select(Listing).where(Listing.is_active.is_(False))
+        ).all()
+        days = sorted(
+            max((lst.last_seen - lst.first_seen).total_seconds() / 86400, 0.0)
+            for lst in gone
+        )
+        median_days = days[len(days) // 2] if days else None
+
     return StatusOut(
         last_run=last_run,
         last_alert=last_alert,
@@ -165,6 +175,7 @@ def status() -> StatusOut:
         active_listings=len(active),
         hot_deals=hot,
         by_model=dict(by_model),
+        median_days_to_sell=round(median_days, 1) if median_days is not None else None,
     )
 
 

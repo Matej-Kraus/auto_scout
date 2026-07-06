@@ -4,22 +4,28 @@ export interface SearchState {
   query: string;
   manualOnly: boolean;
   maxPrice: number | null;
+  maxKm: number | null;
   source: string | null; // "sauto" | "sbazar" | ... | null = vše
   fuel: string | null; // "petrol" | "diesel" | ... | null = vše
   yearFrom: number | null;
   yearTo: number | null;
   dedupe: boolean; // sloučit stejné auto z víc bazarů do jednoho
+  favoritesOnly: boolean;
+  showHidden: boolean;
 }
 
 export const EMPTY_SEARCH: SearchState = {
   query: "",
   manualOnly: false,
   maxPrice: null,
+  maxKm: null,
   source: null,
   fuel: null,
   yearFrom: null,
   yearTo: null,
   dedupe: true,
+  favoritesOnly: false,
+  showHidden: false,
 };
 
 export function isSearchActive(s: SearchState): boolean {
@@ -27,10 +33,12 @@ export function isSearchActive(s: SearchState): boolean {
     s.query.trim() !== "" ||
     s.manualOnly ||
     s.maxPrice != null ||
+    s.maxKm != null ||
     s.source != null ||
     s.fuel != null ||
     s.yearFrom != null ||
-    s.yearTo != null
+    s.yearTo != null ||
+    s.favoritesOnly
   );
 }
 
@@ -71,10 +79,18 @@ function matchesQuery(l: Listing, query: string): boolean {
   return true;
 }
 
-export function applySearch(listings: Listing[], s: SearchState): Listing[] {
+export function applySearch(
+  listings: Listing[],
+  s: SearchState,
+  favorites?: Set<string>,
+  hidden?: Set<string>,
+): Listing[] {
   return listings.filter((l) => {
+    if (!s.showHidden && hidden?.has(l.url)) return false;
+    if (s.favoritesOnly && !favorites?.has(l.url)) return false;
     if (s.manualOnly && l.transmission !== "manual") return false;
     if (s.maxPrice != null && l.price_czk > s.maxPrice) return false;
+    if (s.maxKm != null && (l.mileage_km == null || l.mileage_km > s.maxKm)) return false;
     if (s.source && l.source !== s.source) return false;
     if (s.fuel && l.fuel_type !== s.fuel) return false;
     if (s.yearFrom != null && (l.year == null || l.year < s.yearFrom)) return false;

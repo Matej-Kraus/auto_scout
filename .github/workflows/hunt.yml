@@ -39,8 +39,9 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           NOTIFY_ENABLED: ${{ vars.NOTIFY_ENABLED || 'false' }}
-          # Email notifikace (zdarma napr. Gmail App password)
-          EMAIL_ENABLED: ${{ vars.EMAIL_ENABLED || 'true' }}
+          # Email notifikace (vychozi vypnuto — web je hlavni rozhrani;
+          # zapnes Actions Variable EMAIL_ENABLED=true + SMTP secrets)
+          EMAIL_ENABLED: ${{ vars.EMAIL_ENABLED || 'false' }}
           SMTP_HOST: ${{ vars.SMTP_HOST || 'smtp.gmail.com' }}
           SMTP_PORT: ${{ vars.SMTP_PORT || '587' }}
           SMTP_USER: ${{ secrets.SMTP_USER }}

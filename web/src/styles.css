@@ -492,13 +492,22 @@ body::after {
 }
 .card-noimg {
   height: 100%;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.2em;
+  font-size: 10px;
+  letter-spacing: 0.18em;
   color: var(--text-faint);
   text-transform: uppercase;
+  background:
+    radial-gradient(240px 120px at 50% 40%, rgba(255, 106, 23, 0.06), transparent 70%),
+    var(--bg-raised);
+}
+.card-noimg svg {
+  color: var(--line-bright);
 }
 .card-rank {
   position: absolute;
@@ -856,4 +865,64 @@ body::after {
   font-size: 11px;
   color: var(--text-faint);
   letter-spacing: 0.04em;
+}
+
+
+/* ---------- oblibene / skryte / polish ---------- */
+.card-photo::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 42%;
+  background: linear-gradient(180deg, transparent, rgba(6, 8, 10, 0.55));
+  pointer-events: none;
+}
+.card-actions {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  display: flex;
+  gap: 6px;
+  z-index: 2;
+}
+.starbtn,
+.hidebtn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--line-bright);
+  background: rgba(10, 12, 15, 0.82);
+  color: var(--text-dim);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.starbtn:hover {
+  color: var(--fair);
+  border-color: rgba(255, 210, 63, 0.6);
+}
+.starbtn.on {
+  color: var(--fair);
+  border-color: rgba(255, 210, 63, 0.7);
+  box-shadow: 0 0 12px rgba(255, 210, 63, 0.35);
+}
+.hidebtn:hover {
+  color: var(--hot);
+  border-color: rgba(255, 59, 48, 0.6);
+}
+.hero {
+  position: relative;
+}
+.hero-star {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 3;
+  width: 36px;
+  height: 36px;
+  font-size: 18px;
+}
+.card:hover .card-title {
+  color: var(--amber-soft);
 }

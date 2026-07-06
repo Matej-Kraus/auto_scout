@@ -19,7 +19,12 @@ logger = logging.getLogger(__name__)
 
 _TRANSMISSION_CZ = {"manual": "manuál", "auto": "automat"}
 _DRIVETRAIN_CZ = {"rwd": "RWD", "awd": "AWD", "fwd": "FWD"}
-_BONUS_CZ = {"manual": "manuál", "drivetrain": "RWD/AWD", "low_mileage": "nízký nájezd"}
+_BONUS_CZ = {
+    "manual": "manuál",
+    "drivetrain": "RWD/AWD",
+    "low_mileage": "nízký nájezd",
+    "equipment": "výbava",
+}
 
 
 def _recipients() -> list[str]:

@@ -121,6 +121,12 @@ def build_watch(row: WatchRow) -> Watch:
     if row.price_from_czk:
         ka["price_from"] = int(row.price_from_czk / _APPROX_CZK_PER_EUR)
 
+    # mobile.de (jen lokalni denni beh, viz scrapers/mobilede_local.py)
+    mobilede: dict = {"text": " ".join(x for x in (make, model, variant) if x)}
+    for key in ("name_includes", "year_from", "year_to", "price_to"):
+        if key in ka:
+            mobilede[key] = ka[key]
+
     label = " ".join(x for x in (make, model, variant) if x)
     return Watch(
         model=row.model_key,
@@ -131,5 +137,6 @@ def build_watch(row: WatchRow) -> Watch:
             "sbazar": sbazar,
             "autoscout24": as24,
             "kleinanzeigen": ka,
+            "mobilede": mobilede,
         },
     )

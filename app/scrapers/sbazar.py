@@ -196,6 +196,11 @@ def _mileage_from_name(name: str) -> int | None:
     return None
 
 
+# Seznam CDN (sdn.cz) vraci na holou URL 401 — pusti jen konkretni whitelistovanou
+# transformaci s watermarkem (stejnou, jakou pouziva web Sbazar).
+_SBAZAR_IMG_FL = "?fl=exf|res,640,480,1|wrm,/watermark/sbazar.png,10,10|webp,75"
+
+
 def _first_image(item: dict) -> str | None:
     images = item.get("images") or []
     if not images:
@@ -203,4 +208,6 @@ def _first_image(item: dict) -> str | None:
     url = (images[0] or {}).get("url")
     if not url:
         return None
-    return "https:" + url if url.startswith("//") else url
+    if url.startswith("//"):
+        url = "https:" + url
+    return url + _SBAZAR_IMG_FL

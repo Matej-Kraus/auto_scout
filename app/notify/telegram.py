@@ -89,6 +89,7 @@ def format_alert(listing: Listing, score: DealScore, kind: str, old_price: int |
         "manual": "manuál",
         "drivetrain": "RWD/AWD",
         "low_mileage": "nízký nájezd",
+        "equipment": "výbava",
     }
     bonuses = [bonus_labels[k] for k in score.bonuses if k in bonus_labels]
     if bonuses:

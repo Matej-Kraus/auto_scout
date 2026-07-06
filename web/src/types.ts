@@ -64,4 +64,5 @@ export interface Status {
   active_listings: number;
   hot_deals: number;
   by_model: Record<string, number>;
+  median_days_to_sell: number | null;
 }

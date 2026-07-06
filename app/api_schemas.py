@@ -67,3 +67,4 @@ class StatusOut(BaseModel):
     active_listings: int
     hot_deals: int  # aktivni s deal skore >= 0.18
     by_model: dict[str, int]  # pocet aktivnich na model
+    median_days_to_sell: float | None = None  # median dnu na trhu u zmizelych inzeratu

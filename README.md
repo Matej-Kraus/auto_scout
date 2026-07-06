@@ -69,14 +69,28 @@ python -m scripts.telegram_chatid          # token z .env, nebo předej argument
 > Za firemní TLS proxy, která láme SSL, nastav v `.env` `SSL_VERIFY=false`
 > (v produkci nech `true`).
 
-### Mobile.de (volitelné)
+### Mobile.de — denní lokální běh (zdarma, z domácí IP)
+
+Mobile.de chrání Akamai: z cloudu neprůchodné, z domácí (rezidenční) IP přes
+Firefox to projde. Proto běží 1× denně **lokálně na tvém Macu** a zapisuje do
+stejné DB jako cron:
 
 ```bash
 pip install -e ".[playwright]"
-python -m playwright install chromium
+python -m playwright install firefox
+
+# rucni test (pri Akamai challenge mekce skonci, zkus jindy):
+python -m scripts.run_mobilede_local
+
+# automaticky kazdy den v 8:15 (jednorazova instalace):
+cp deploy/com.carscout.mobilede.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.carscout.mobilede.plist
+# log: /tmp/carscout-mobilede.log
 ```
 
-A do `app/config.py` k danému watchi doplnit `portal_params["mobilede"]`.
+Parametry si odvodí z watchů automaticky. Diagnostika: `python -m scripts.mobilede_probe`
+(jediný opatrný pokus; při úspěchu uloží snapshot stránky). Pozor: opakované
+pokusy Akamai flag prodlužují — max pár za den.
 
 ---
 

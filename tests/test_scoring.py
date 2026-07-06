@@ -61,3 +61,15 @@ def test_manual_and_drivetrain_bonus():
     score = score_listing(target, samples)
     assert "manual" in score.bonuses
     assert "drivetrain" in score.bonuses
+
+
+def test_equipment_bonus():
+    from app.scoring.engine import equipment_bonus
+
+    bonus, found = equipment_bonus("VW Golf GTI DSG Xenon Panorama servisní knížka")
+    assert bonus > 0
+    assert "xenon_led" in found and "panorama" in found and "serviska" in found
+    # strop 0.04 (4 polozky × 0.01)
+    assert bonus <= 0.04
+    assert equipment_bonus("obyčejný popis")[0] == 0.0
+    assert equipment_bonus(None)[0] == 0.0

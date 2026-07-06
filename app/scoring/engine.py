@@ -55,8 +55,29 @@ def _fit_predict(samples: list[Listing], target: Listing) -> float | None:
     return float(pred) if pred > 0 else None
 
 
+# Vybava/stav z nazvu inzeratu, ktera zvedne hodnotu pri stejne cene.
+# CZ i DE terminy; kazda polozka +0.01, strop 0.04 (vybava nema prebit cenu).
+_EQUIPMENT_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("serviska", ("servisní knížka", "serviska", "scheckheft", "servisni")),
+    ("xenon_led", ("xenon", "bixenon", "bi-xenon", " led", "matrix")),
+    ("panorama", ("panorama", "pano ", "panorámou", "schiebedach")),
+    ("navi", ("navi", "navigace", "navigation")),
+    ("performance", ("performance", "akrapovic", "dcc", "dynaudio")),
+    ("top_stav", ("top stav", "1. majitel", "1.majitel", "unfallfrei", "garážované", "garazovane")),
+)
+
+
+def equipment_bonus(title: str | None) -> tuple[float, list[str]]:
+    """Bonus za vybavu vycteny z nazvu inzeratu. Vraci (bonus, nalezene klice)."""
+    if not title:
+        return 0.0, []
+    low = f" {title.lower()} "
+    found = [key for key, hints in _EQUIPMENT_HINTS if any(h in low for h in hints)]
+    return min(len(found) * 0.01, 0.04), found
+
+
 def _bonuses(listing: Listing, samples: list[Listing]) -> dict[str, float]:
-    """Bonusove body za preference (manual, nizky km, RWD/AWD)."""
+    """Bonusove body za preference (manual, nizky km, RWD/AWD, vybava)."""
     bonuses: dict[str, float] = {}
 
     if listing.transmission == "manual":
@@ -64,6 +85,10 @@ def _bonuses(listing: Listing, samples: list[Listing]) -> dict[str, float]:
 
     if listing.drivetrain in ("rwd", "awd"):
         bonuses["drivetrain"] = 0.03
+
+    eq_bonus, _found = equipment_bonus(listing.title)
+    if eq_bonus > 0:
+        bonuses["equipment"] = eq_bonus
 
     # nizky najezd vuci rocniku: porovnej s medianem km u podobne starych vozu
     if listing.mileage_km is not None:

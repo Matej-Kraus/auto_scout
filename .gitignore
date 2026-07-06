@@ -18,6 +18,9 @@ local.db*
 # FX cache
 .fx_cache.json
 
+# mobile.de lokalni artefakty (snapshot z probe, profil prohlizece)
+scripts/mobilede_snapshot.html
+
 # Node / frontend
 web/node_modules/
 web/dist/

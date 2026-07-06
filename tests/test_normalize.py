@@ -74,3 +74,25 @@ def test_normalize_eur_converts(monkeypatch):
     assert data["price_czk"] == 250000
     assert data["currency"] == "EUR"
     assert data["drivetrain"] == "awd"  # quattro
+
+
+def test_parse_power_kw():
+    from app.normalize import parse_power_kw
+
+    assert parse_power_kw("180 kW (245 PS)") == 180
+    assert parse_power_kw("110 KW") == 110
+    assert parse_power_kw("Golf GTI 195kW") == 195
+    assert parse_power_kw("245 PS") == 180  # z konskych sil
+    assert parse_power_kw("1968 ccm") is None
+    assert parse_power_kw(None) is None
+
+
+def test_parse_body():
+    from app.normalize import parse_body
+
+    assert parse_body("VW Golf Variant") == "kombi"
+    assert parse_body("Audi A6 Avant") == "kombi"
+    assert parse_body("BMW 320d Limousine") == "sedan"
+    assert parse_body("Audi TT Coupé") == "coupe"
+    assert parse_body("VW Golf GTI") is None
+    assert parse_body(None) is None

@@ -926,3 +926,15 @@ body::after {
 .card:hover .card-title {
   color: var(--amber-soft);
 }
+
+.pill-reset {
+  color: var(--steel);
+  font-size: 14px;
+}
+.pill-reset:hover {
+  color: var(--amber);
+}
+.pill-reset:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}

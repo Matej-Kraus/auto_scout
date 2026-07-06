@@ -42,6 +42,10 @@ class Listing(Base):
     fuel_type: Mapped[str | None] = mapped_column(
         String(16), nullable=True
     )  # petrol | diesel | hybrid | electric | lpg | cng
+    power_kw: Mapped[int | None] = mapped_column(Integer, nullable=True)  # vykon motoru v kW
+    body_type: Mapped[str | None] = mapped_column(
+        String(16), nullable=True
+    )  # hatchback | kombi | sedan | suv | coupe | cabrio | mpv | pickup
 
     price_czk: Mapped[int] = mapped_column(Integer)
     price_original: Mapped[int] = mapped_column(Integer)

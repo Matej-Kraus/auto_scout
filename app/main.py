@@ -71,6 +71,8 @@ def _to_out(lst: Listing, score) -> ListingOut:
         transmission=lst.transmission,
         drivetrain=lst.drivetrain,
         fuel_type=lst.fuel_type,
+        power_kw=lst.power_kw,
+        body_type=lst.body_type,
         price_czk=lst.price_czk,
         currency=lst.currency,
         url=lst.url,
@@ -307,10 +309,17 @@ def delete_watch(watch_id: int, purge: bool = False) -> dict:
 
 
 @app.post("/api/run")
-def trigger_run(model_key: str | None = None) -> dict:
-    """Rucni spusteni pipeline (lokalni vyvoj). Synchronni — chvili to trva.
+def trigger_run(
+    model_key: str | None = None,
+    include_mobilede: bool = False,
+    refresh: bool = False,
+) -> dict:
+    """Rucni spusteni pipeline (bezi lokalne — API je na domaci IP).
 
-    S model_key prohleda jen jedno auto (pro "Prohledat teď" po pridani watche).
+    - model_key: prohleda jen jedno auto (po pridani / "Prohledat znovu").
+    - include_mobilede: pripoji i mobile.de (Playwright Firefox, jen lokalne).
+    - refresh: nejdriv smaze existujici inzeraty toho auta → vysledky jsou cerstve,
+      ne "stare X dni" (reset tlacitko u auta).
     """
     from app.alerting import process_alerts
     from app.pipeline import run_pipeline
@@ -322,7 +331,30 @@ def trigger_run(model_key: str | None = None) -> dict:
             watches = [w for w in watches if w.model == model_key]
             if not watches:
                 raise HTTPException(status_code=404, detail=f"Watch {model_key} nenalezen")
-        diff = run_pipeline(session, watches, build_scrapers())
+
+        if refresh and model_key:
+            # smaz stara data toho auta → prohledani je od nuly (zadne "duchy")
+            for lst in session.scalars(
+                select(Listing).where(Listing.model == model_key)
+            ).all():
+                session.delete(lst)
+            session.flush()
+
+        scrapers = build_scrapers()
+        if include_mobilede:
+            from app.watch_builder import ensure_mobilede_params
+
+            watches = [ensure_mobilede_params(w) for w in watches]
+            try:
+                from app.scrapers.mobilede_local import MobileDeLocalScraper
+
+                scrapers.append(MobileDeLocalScraper())
+            except Exception:  # noqa: BLE001 — Playwright nemusi byt lokalne
+                logger.warning("mobile.de lokalne nedostupne (chybi Playwright?)")
+
+        diff = run_pipeline(session, watches, scrapers)
         sent = process_alerts(session, diff)
         session.commit()
     return {"status": "ok", "summary": diff.summary, "alerts": sent}
+
+

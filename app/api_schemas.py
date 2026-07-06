@@ -17,6 +17,8 @@ class ListingOut(BaseModel):
     transmission: str | None
     drivetrain: str | None
     fuel_type: str | None
+    power_kw: int | None = None
+    body_type: str | None = None
     price_czk: int
     currency: str
     url: str

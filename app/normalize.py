@@ -70,6 +70,49 @@ def parse_fuel(text: str | None) -> str | None:
     return None
 
 
+# --- vykon: "180 kW", "110 KW", "180 kW (245 PS)" → 180 ---
+_KW_RE = re.compile(r"(\d{2,3})\s*kw\b", re.IGNORECASE)
+# fallback z konskych sil: "245 PS"/"245 hp" → kW (×0.7355)
+_PS_RE = re.compile(r"(\d{2,3})\s*(?:PS|hp)\b", re.IGNORECASE)
+
+
+def parse_power_kw(text: str | None) -> int | None:
+    if not text:
+        return None
+    m = _KW_RE.search(text)
+    if m:
+        kw = int(m.group(1))
+        return kw if 30 <= kw <= 700 else None
+    m = _PS_RE.search(text)
+    if m:
+        kw = round(int(m.group(1)) * 0.7355)
+        return kw if 30 <= kw <= 700 else None
+    return None
+
+
+# --- karoserie z textu (CZ + DE) ---
+_BODY_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("kombi", ("kombi", "combi", "variant", "avant", "touring", "estate", "sw", "kaross")),
+    ("suv", ("suv", "allroad", "cross", "x-drive suv")),
+    ("cabrio", ("cabrio", "kabrio", "roadster", "convertible", "spider", "spyder")),
+    ("coupe", ("coupe", "coupé", "kupé")),
+    ("mpv", ("mpv", "van", "minivan", "scenic", "touran", "sharan", "zafira")),
+    ("pickup", ("pickup", "pick-up", "pick up")),
+    ("sedan", ("sedan", "limousine", "limuzína", "limuzina", "saloon", "notchback")),
+    ("hatchback", ("hatchback", "hatch", "liftback", "fließheck", "fliessheck", "5dv", "3dv")),
+)
+
+
+def parse_body(text: str | None) -> str | None:
+    if not text:
+        return None
+    low = f" {text.lower()} "
+    for body, hints in _BODY_HINTS:
+        if any(h in low for h in hints):
+            return body
+    return None
+
+
 def parse_int(text: str | int | None) -> int | None:
     """Vytahne cele cislo z textu jako '215 000 Kc' nebo '140.000 km'."""
     if text is None:
@@ -114,6 +157,8 @@ def normalize(raw: RawListing, model: str, generation: str) -> dict:
         ),
         "drivetrain": parse_drivetrain(raw.drivetrain_text or raw.title, model),
         "fuel_type": parse_fuel(raw.fuel_text or raw.title),
+        "power_kw": parse_power_kw(raw.power_text or raw.title),
+        "body_type": parse_body(raw.body_text or raw.title),
         "price_czk": price_czk,
         "price_original": price_original,
         "currency": raw.currency.upper(),

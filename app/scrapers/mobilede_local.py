@@ -206,6 +206,8 @@ def parse_listings(page_html: str, query: SearchQuery) -> list[RawListing]:
                 transmission_text=attrs,  # normalize vytáhne manual/automat
                 drivetrain_text=title,
                 fuel_text=attrs,  # Benzin/Diesel je v atributech
+                power_text=attrs,  # "92 kW (125 PS)" je v atributech
+                body_text=title,
                 image_url=img_m.group(1) if img_m else None,
                 raw={"attrs": attrs},
             )

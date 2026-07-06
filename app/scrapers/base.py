@@ -40,6 +40,8 @@ class RawListing:
     transmission_text: str | None = None  # syrovy text prevodovky
     drivetrain_text: str | None = None  # syrovy text pohonu
     fuel_text: str | None = None  # syrovy text paliva (napr. "Benzín" / "Diesel")
+    power_text: str | None = None  # syrovy text s vykonem (napr. "180 kW")
+    body_text: str | None = None  # syrovy text karoserie (napr. "Kombi")
     image_url: str | None = None  # nahledovy obrazek (prvni foto)
     raw: dict = field(default_factory=dict)  # cela odpoved pro pripadny dalsi parsing
 

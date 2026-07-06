@@ -8,14 +8,17 @@ import {
   fetchModels,
   fetchStatus,
   fetchWatches,
+  runScan,
 } from "./api";
 import { Drawer } from "./Drawer";
 import {
+  bodyLabel,
   czk,
   dealTier,
   drivetrainLabel,
   fuelLabel,
   km,
+  kw,
   pct,
   sourceLabel,
   timeAgo,
@@ -40,7 +43,9 @@ import type { Listing, Status, Watch } from "./types";
 
 const PRICE_STEPS = [200_000, 300_000, 400_000, 600_000];
 const KM_STEPS = [100_000, 150_000, 200_000];
+const KW_STEPS = [110, 150, 200, 250];
 const FUELS = ["petrol", "diesel", "hybrid", "electric"];
+const BODIES = ["hatchback", "kombi", "sedan", "suv", "coupe", "cabrio"];
 
 function yearOptions(min: number, max: number): number[] {
   const out: number[] = [];
@@ -104,6 +109,10 @@ export function App() {
     () => FUELS.filter((f) => (listings ?? []).some((l) => l.fuel_type === f)),
     [listings],
   );
+  const bodies = useMemo(
+    () => BODIES.filter((b) => (listings ?? []).some((l) => l.body_type === b)),
+    [listings],
+  );
   const years = useMemo(() => {
     const ys = (listings ?? []).map((l) => l.year).filter((y): y is number => y != null);
     return ys.length ? { min: Math.min(...ys), max: Math.max(...ys) } : null;
@@ -157,25 +166,35 @@ export function App() {
     loadListings();
   }
 
-  async function handleScanNow(modelKey: string) {
+  async function handleScanNow(
+    modelKey: string,
+    opts: { refresh?: boolean; includeMobilede?: boolean } = { includeMobilede: true },
+  ) {
     setScanning(modelKey);
     try {
-      const res = await fetch(`/api/run?model_key=${encodeURIComponent(modelKey)}`, {
-        method: "POST",
-      });
-      if (!res.ok) throw new Error(`API ${res.status}`);
+      await runScan(modelKey, opts);
       loadListings();
       loadWatches();
     } catch {
-      // V produkci (Vercel) nejde scrapovat ze serverless funkce — auto je ale
-      // uložené a cron ho prohledá při dalším běhu.
       alert(
-        "Auto je uložené v garáži. Inzeráty se objeví po příštím automatickém prohledání (do hodiny).",
+        "Auto je uložené v garáži. Prohledání teď neběží (nespuštěné lokální API?) — " +
+          "cron ho najde při dalším běhu.",
       );
       loadWatches();
     } finally {
       setScanning(null);
     }
+  }
+
+  async function handleReset(w: Watch) {
+    if (
+      !window.confirm(
+        `Najít ${w.label} znovu? Smažou se stará data a prohledají se všechny bazary ` +
+          `(vč. mobile.de) načisto. Chvíli to trvá.`,
+      )
+    )
+      return;
+    await handleScanNow(w.model_key, { refresh: true, includeMobilede: true });
   }
 
   return (
@@ -244,6 +263,14 @@ export function App() {
                 {w.label}
                 <em>{w.active_listings}</em>
               </button>
+              <button
+                className="pill-x pill-reset"
+                title={`Najít ${w.label} znovu (smaže staré, prohledá vč. mobile.de)`}
+                disabled={scanning === w.model_key}
+                onClick={() => handleReset(w)}
+              >
+                {scanning === w.model_key ? "…" : "⟳"}
+              </button>
               {!w.curated && (
                 <button
                   className="pill-x"
@@ -296,6 +323,25 @@ export function App() {
               onClick={() => setSearch((s) => ({ ...s, maxKm: s.maxKm === k ? null : k }))}
             >
               ≤{Math.round(k / 1000)}t km
+            </button>
+          ))}
+          {(listings ?? []).some((l) => l.power_kw != null) &&
+            KW_STEPS.map((k) => (
+              <button
+                key={k}
+                className={`pill ${search.minKw === k ? "active" : ""}`}
+                onClick={() => setSearch((s) => ({ ...s, minKw: s.minKw === k ? null : k }))}
+              >
+                ≥{k} kW
+              </button>
+            ))}
+          {bodies.map((bd) => (
+            <button
+              key={bd}
+              className={`pill ${search.body === bd ? "active" : ""}`}
+              onClick={() => setSearch((s) => ({ ...s, body: s.body === bd ? null : bd }))}
+            >
+              {bodyLabel(bd)}
             </button>
           ))}
           <button
@@ -693,9 +739,11 @@ function HeroCard({
         <div className="specs">
           <span>{listing.year ?? "—"}</span>
           <span>{km(listing.mileage_km)}</span>
+          {listing.power_kw != null && <span>{kw(listing.power_kw)}</span>}
           <span>{transmissionLabel(listing.transmission)}</span>
           <span>{drivetrainLabel(listing.drivetrain)}</span>
           <span>{fuelLabel(listing.fuel_type)}</span>
+          {listing.body_type && <span>{bodyLabel(listing.body_type)}</span>}
           <span>· {timeAgo(listing.first_seen)}</span>
         </div>
         {duplicates.length > 0 && (
@@ -799,8 +847,10 @@ function CarCard({
         <div className="card-meta">
           <span>{listing.year ?? "—"}</span>
           <span>{km(listing.mileage_km)}</span>
+          {listing.power_kw != null && <span>{kw(listing.power_kw)}</span>}
           <span>{transmissionLabel(listing.transmission)}</span>
           {listing.fuel_type && <span>{fuelLabel(listing.fuel_type)}</span>}
+          {listing.body_type && <span>{bodyLabel(listing.body_type)}</span>}
         </div>
         <div className="card-priceline">
           <span className="card-price">{czk(listing.price_czk)}</span>

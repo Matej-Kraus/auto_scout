@@ -30,6 +30,20 @@ const FUEL_LABELS: Record<string, string> = {
 };
 export const fuelLabel = (f: string | null) => (f ? FUEL_LABELS[f] ?? f : "—");
 
+const BODY_LABELS: Record<string, string> = {
+  hatchback: "Hatchback",
+  kombi: "Kombi",
+  sedan: "Sedan",
+  suv: "SUV",
+  coupe: "Kupé",
+  cabrio: "Kabrio",
+  mpv: "MPV",
+  pickup: "Pickup",
+};
+export const bodyLabel = (b: string | null) => (b ? BODY_LABELS[b] ?? b : "—");
+
+export const kw = (n: number | null) => (n == null ? null : `${n} kW`);
+
 export const sourceLabel = (s: string) =>
   ({
     sauto: "SAUTO",

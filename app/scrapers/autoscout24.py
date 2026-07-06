@@ -150,6 +150,8 @@ def parse_listings(page_props: dict, query: SearchQuery) -> list[RawListing]:
                 transmission_text=_gearbox(item),
                 drivetrain_text=title,
                 fuel_text=_detail_from_icons(item, "gas_pump"),
+                power_text=_detail_from_icons(item, "speedometer"),
+                body_text=title,
                 image_url=_first_image(item),
                 raw=item,
             )

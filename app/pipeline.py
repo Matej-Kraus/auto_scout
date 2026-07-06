@@ -97,6 +97,8 @@ def _upsert(session: Session, raw: RawListing, watch: Watch):
         "transmission",
         "drivetrain",
         "fuel_type",
+        "power_kw",
+        "body_type",
         "title",
         "url",
         "image_url",

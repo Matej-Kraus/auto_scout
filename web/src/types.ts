@@ -8,6 +8,8 @@ export interface Listing {
   transmission: string | null;
   drivetrain: string | null;
   fuel_type: string | null;
+  power_kw: number | null;
+  body_type: string | null;
   price_czk: number;
   currency: string;
   url: string;

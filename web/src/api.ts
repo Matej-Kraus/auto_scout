@@ -67,3 +67,23 @@ export async function fetchModels(makeId: number): Promise<CatalogMake[]> {
   if (!res.ok) throw new Error(`API ${res.status}`);
   return res.json();
 }
+
+export interface RunResult {
+  status: string;
+  summary: string;
+  alerts: number;
+}
+
+/** Prohledá auto na všech bazarech. Volitelně smaže stará data (refresh) a
+ *  připojí mobile.de (běží lokálně z domácí IP, pomalejší). */
+export async function runScan(
+  modelKey: string,
+  opts: { refresh?: boolean; includeMobilede?: boolean } = {},
+): Promise<RunResult> {
+  const q = new URLSearchParams({ model_key: modelKey });
+  if (opts.refresh) q.set("refresh", "true");
+  if (opts.includeMobilede) q.set("include_mobilede", "true");
+  const res = await fetch(`${BASE}/api/run?${q.toString()}`, { method: "POST" });
+  if (!res.ok) throw new Error(`API ${res.status}`);
+  return res.json();
+}

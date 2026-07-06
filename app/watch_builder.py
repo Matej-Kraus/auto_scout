@@ -81,6 +81,30 @@ def _name_tokens(model: str, variant: str) -> list[str]:
     return tokens
 
 
+def ensure_mobilede_params(watch: Watch) -> Watch:
+    """Doplni mobilede portal_params z kleinanzeigen bloku, pokud chybi.
+
+    Kuratorske watche z config.py mobilede nemaji (mobile.de bezi jen lokalne);
+    pri lokalnim behu si je odvodime z kleinanzeigen (search_slug, roky, cena).
+    Uzivatelske watche uz mobilede z build_watch maji.
+    """
+    if watch.portal_params.get("mobilede"):
+        return watch
+    ka = watch.portal_params.get("kleinanzeigen")
+    if not ka:
+        return watch
+    md: dict = {"text": ka["search_slug"].replace("-", " ")}
+    for key in ("name_includes", "year_from", "year_to", "price_to"):
+        if key in ka:
+            md[key] = ka[key]
+    return Watch(
+        model=watch.model,
+        generation=watch.generation,
+        label=watch.label,
+        portal_params={**watch.portal_params, "mobilede": md},
+    )
+
+
 def build_watch(row: WatchRow) -> Watch:
     """Postavi Watch s parametry pro vsechny portaly z jednoho DB radku."""
     make, model, variant = row.make.strip(), row.model_name.strip(), (row.variant or "").strip()

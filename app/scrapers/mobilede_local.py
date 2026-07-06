@@ -24,18 +24,16 @@ import logging
 import random
 import re
 import time
-from pathlib import Path
 
 from app.scrapers.base import RawListing, Scraper, SearchQuery
 
 logger = logging.getLogger(__name__)
 
 BASE = "https://suchen.mobile.de"
-DELAY_RANGE = (25.0, 60.0)  # dlouhe pauzy mezi watchi — 1x denne nespechame
-GOTO_ATTEMPTS = 3  # Akamai challenge je pravdepodobnostni → par pokusu
-# Trvaly profil prohlizece: jednou vyresena Akamai challenge ulozi _abck cookie,
-# takze dalsi behy uz projdou bez challenge (jako vraceny navstevnik).
-_PROFILE_DIR = Path.home() / ".carscout" / "mobilede-profile"
+# mobile.de/Akamai pusti z rezidencni IP ~1 pozadavek, pak IP na chvili flagne.
+# Proto: JEDEN pokus na watch (retry jen flag prodluzuje) + dlouha pauza mezi watchi,
+# aby se stihla reputace srovnat. Po prvni challenge uz dalsi watche nezkousime.
+DELAY_RANGE = (60.0, 120.0)
 
 # Vysledovka mobile.de je Next.js — jeden inzerat zacina data-testid
 # "listing-title-card-view". V bloku pak: cena (price-label), atributy
@@ -77,32 +75,23 @@ class MobileDeLocalScraper(Scraper):
             return []
 
         url = _build_url(query)
-        _PROFILE_DIR.mkdir(parents=True, exist_ok=True)
         page_html: str | None = None
         with sync_playwright() as pw:
-            # persistent context = trvaly profil (cookies _abck z vyresene challenge)
-            ctx = pw.firefox.launch_persistent_context(
-                str(_PROFILE_DIR),
-                headless=True,
-                locale="de-DE",
-                viewport={"width": 1440, "height": 900},
-            )
-            page = ctx.pages[0] if ctx.pages else ctx.new_page()
+            # Cerstvy Firefox + novy kontext (presne jako funkcni probe). JEDEN pokus.
+            browser = pw.firefox.launch(headless=True)
             try:
-                for attempt in range(1, GOTO_ATTEMPTS + 1):
-                    page.goto(url, wait_until="domcontentloaded", timeout=45000)
-                    page.wait_for_timeout(8000)  # nech Akamai JS dobehnout
-                    title = page.title()
-                    if title and "verweigert" not in title.lower() and "denied" not in title.lower():
-                        page_html = page.content()
-                        break
-                    logger.info("mobilede[%s]: challenge, pokus %d/%d", query.model, attempt, GOTO_ATTEMPTS)
-                    page.wait_for_timeout(random.uniform(5000, 12000))
+                ctx = browser.new_context(locale="de-DE", viewport={"width": 1440, "height": 900})
+                page = ctx.new_page()
+                page.goto(url, wait_until="domcontentloaded", timeout=45000)
+                page.wait_for_timeout(8000)  # nech Akamai JS dobehnout
+                title = page.title()
+                if title and "verweigert" not in title.lower() and "denied" not in title.lower():
+                    page_html = page.content()
             finally:
-                ctx.close()
+                browser.close()
 
         if page_html is None:
-            logger.warning("mobilede[%s]: Akamai challenge i po %d pokusech, preskakuji", query.model, GOTO_ATTEMPTS)
+            logger.warning("mobilede[%s]: Akamai challenge, preskakuji (IP potrebuje klid)", query.model)
             self._challenged = True
             return []
 

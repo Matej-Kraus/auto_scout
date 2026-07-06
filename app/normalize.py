@@ -91,24 +91,29 @@ def parse_power_kw(text: str | None) -> int | None:
 
 
 # --- karoserie z textu (CZ + DE) ---
+# Slova hledame na hranicich (\b), aby "sw"/"van" nematchovaly uvnitr
+# "Volkswagen" apod. Poradi = priorita (kombi/suv pred obecnym sedan).
 _BODY_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("kombi", ("kombi", "combi", "variant", "avant", "touring", "estate", "sw", "kaross")),
-    ("suv", ("suv", "allroad", "cross", "x-drive suv")),
+    ("kombi", ("kombi", "combi", "variant", "avant", "touring", "estate", "kombík")),
+    ("suv", ("suv", "allroad", "crossover")),
     ("cabrio", ("cabrio", "kabrio", "roadster", "convertible", "spider", "spyder")),
     ("coupe", ("coupe", "coupé", "kupé")),
-    ("mpv", ("mpv", "van", "minivan", "scenic", "touran", "sharan", "zafira")),
-    ("pickup", ("pickup", "pick-up", "pick up")),
+    ("mpv", ("mpv", "minivan", "scenic", "touran", "sharan", "zafira")),
+    ("pickup", ("pickup", "pick-up")),
     ("sedan", ("sedan", "limousine", "limuzína", "limuzina", "saloon", "notchback")),
-    ("hatchback", ("hatchback", "hatch", "liftback", "fließheck", "fliessheck", "5dv", "3dv")),
+    ("hatchback", ("hatchback", "liftback", "fließheck", "fliessheck")),
 )
+_BODY_RE = {
+    body: re.compile(r"\b(?:" + "|".join(re.escape(h) for h in hints) + r")\b", re.IGNORECASE)
+    for body, hints in _BODY_HINTS
+}
 
 
 def parse_body(text: str | None) -> str | None:
     if not text:
         return None
-    low = f" {text.lower()} "
-    for body, hints in _BODY_HINTS:
-        if any(h in low for h in hints):
+    for body, _hints in _BODY_HINTS:
+        if _BODY_RE[body].search(text):
             return body
     return None
 

@@ -11,6 +11,7 @@ import {
   runScan,
 } from "./api";
 import { Drawer } from "./Drawer";
+import { FilterPanel } from "./FilterPanel";
 import {
   bodyLabel,
   czk,
@@ -42,17 +43,6 @@ import {
 } from "./search";
 import type { Listing, Status, Watch } from "./types";
 
-const PRICE_STEPS = [200_000, 300_000, 400_000, 600_000];
-const KM_STEPS = [100_000, 150_000, 200_000];
-const KW_STEPS = [110, 150, 200, 250];
-const FUELS = ["petrol", "diesel", "hybrid", "electric"];
-const BODIES = ["hatchback", "kombi", "sedan", "suv", "coupe", "cabrio"];
-
-function yearOptions(min: number, max: number): number[] {
-  const out: number[] = [];
-  for (let y = max; y >= min; y--) out.push(y);
-  return out;
-}
 
 export function App() {
   const [listings, setListings] = useState<Listing[] | null>(null);
@@ -67,6 +57,7 @@ export function App() {
   const [visibleCount, setVisibleCount] = useState(48);
   const [favorites, setFavorites] = useState<Set<string>>(loadFavorites);
   const [hidden, setHidden] = useState<Set<string>>(loadHidden);
+  const [showFilters, setShowFilters] = useState(false);
 
   const toggleFavorite = useCallback((url: string) => {
     setFavorites((prev) => {
@@ -101,23 +92,6 @@ export function App() {
     fetchStatus().then(setStatus).catch(() => {});
   }, [loadWatches]);
 
-  // Dynamicke moznosti filtru (jen hodnoty, ktere v datech opravdu jsou).
-  const sources = useMemo(
-    () => Array.from(new Set((listings ?? []).map((l) => l.source))).sort(),
-    [listings],
-  );
-  const fuels = useMemo(
-    () => FUELS.filter((f) => (listings ?? []).some((l) => l.fuel_type === f)),
-    [listings],
-  );
-  const bodies = useMemo(
-    () => BODIES.filter((b) => (listings ?? []).some((l) => l.body_type === b)),
-    [listings],
-  );
-  const years = useMemo(() => {
-    const ys = (listings ?? []).map((l) => l.year).filter((y): y is number => y != null);
-    return ys.length ? { min: Math.min(...ys), max: Math.max(...ys) } : null;
-  }, [listings]);
 
   // Fulltext + filtry client-side, pak slouceni stejneho auta z vic bazaru.
   const matched = useMemo(
@@ -133,6 +107,26 @@ export function App() {
     () => (listings ?? []).filter((l) => isNew(l) && !hidden.has(l.url)).length,
     [listings, hidden],
   );
+  // kolik filtrů v panelu je aktivních (rozsahy + výběry, bez toggle přepínačů)
+  const activeFilterCount = useMemo(() => {
+    const s = search;
+    const vals = [
+      s.priceFrom,
+      s.priceTo,
+      s.yearFrom,
+      s.yearTo,
+      s.kmFrom,
+      s.kmTo,
+      s.kwFrom,
+      s.kwTo,
+      s.transmission,
+      s.drivetrain,
+      s.fuel,
+      s.body,
+      s.source,
+    ];
+    return vals.filter((v) => v != null).length;
+  }, [search]);
 
   // Zmena hledani/filtru resetuje strankovani.
   useEffect(() => setVisibleCount(48), [search, filter]);
@@ -311,57 +305,18 @@ export function App() {
         <div className="deck-row">
           <span className="lbl">Filtr</span>
           <button
-            className={`pill ${search.manualOnly ? "active" : ""}`}
-            onClick={() => setSearch((s) => ({ ...s, manualOnly: !s.manualOnly }))}
+            className={`pill ${showFilters || activeFilterCount > 0 ? "active" : ""}`}
+            onClick={() => setShowFilters((v) => !v)}
           >
-            Jen manuál
+            ⚙ Filtry{activeFilterCount > 0 && <em>{activeFilterCount}</em>}
           </button>
-          {PRICE_STEPS.map((p) => (
-            <button
-              key={p}
-              className={`pill ${search.maxPrice === p ? "active" : ""}`}
-              onClick={() =>
-                setSearch((s) => ({ ...s, maxPrice: s.maxPrice === p ? null : p }))
-              }
-            >
-              do {Math.round(p / 1000)}k
-            </button>
-          ))}
-          {KM_STEPS.map((k) => (
-            <button
-              key={k}
-              className={`pill ${search.maxKm === k ? "active" : ""}`}
-              onClick={() => setSearch((s) => ({ ...s, maxKm: s.maxKm === k ? null : k }))}
-            >
-              ≤{Math.round(k / 1000)}t km
-            </button>
-          ))}
-          {(listings ?? []).some((l) => l.power_kw != null) &&
-            KW_STEPS.map((k) => (
-              <button
-                key={k}
-                className={`pill ${search.minKw === k ? "active" : ""}`}
-                onClick={() => setSearch((s) => ({ ...s, minKw: s.minKw === k ? null : k }))}
-              >
-                ≥{k} kW
-              </button>
-            ))}
-          {bodies.map((bd) => (
-            <button
-              key={bd}
-              className={`pill ${search.body === bd ? "active" : ""}`}
-              onClick={() => setSearch((s) => ({ ...s, body: s.body === bd ? null : bd }))}
-            >
-              {bodyLabel(bd)}
-            </button>
-          ))}
           {newCount > 0 && (
             <button
               className={`pill pill-new ${search.newOnly ? "active" : ""}`}
               title="Jen auta naskočená za posledních 48 h"
               onClick={() => setSearch((s) => ({ ...s, newOnly: !s.newOnly }))}
             >
-              🆕 Jen nové<em>{newCount}</em>
+              🆕 Nové<em>{newCount}</em>
             </button>
           )}
           <button
@@ -370,6 +325,13 @@ export function App() {
             onClick={() => setSearch((s) => ({ ...s, favoritesOnly: !s.favoritesOnly }))}
           >
             ★ Oblíbené{favorites.size > 0 && <em>{favorites.size}</em>}
+          </button>
+          <button
+            className={`pill ${search.dedupe ? "active" : ""}`}
+            title="Stejné auto nabízené na víc bazarech ukázat jen jednou"
+            onClick={() => setSearch((s) => ({ ...s, dedupe: !s.dedupe }))}
+          >
+            ⛓ Bez duplicit
           </button>
           {hiddenCount > 0 && (
             <button
@@ -380,73 +342,16 @@ export function App() {
               Skryté<em>{hiddenCount}</em>
             </button>
           )}
-          {fuels.map((f) => (
-            <button
-              key={f}
-              className={`pill ${search.fuel === f ? "active" : ""}`}
-              onClick={() => setSearch((s) => ({ ...s, fuel: s.fuel === f ? null : f }))}
-            >
-              {fuelLabel(f)}
-            </button>
-          ))}
-          {sources.length > 1 &&
-            sources.map((src) => (
-              <button
-                key={src}
-                className={`pill ${search.source === src ? "active" : ""}`}
-                onClick={() =>
-                  setSearch((s) => ({ ...s, source: s.source === src ? null : src }))
-                }
-              >
-                {sourceLabel(src)}
-              </button>
-            ))}
-          {years && (
-            <>
-              <select
-                className="yearsel"
-                value={search.yearFrom ?? ""}
-                onChange={(e) =>
-                  setSearch((s) => ({
-                    ...s,
-                    yearFrom: e.target.value ? Number(e.target.value) : null,
-                  }))
-                }
-              >
-                <option value="">rok od</option>
-                {yearOptions(years.min, years.max).map((y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="yearsel"
-                value={search.yearTo ?? ""}
-                onChange={(e) =>
-                  setSearch((s) => ({
-                    ...s,
-                    yearTo: e.target.value ? Number(e.target.value) : null,
-                  }))
-                }
-              >
-                <option value="">rok do</option>
-                {yearOptions(years.min, years.max).map((y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
-            </>
-          )}
-          <button
-            className={`pill ${search.dedupe ? "active" : ""}`}
-            title="Stejné auto nabízené na víc bazarech ukázat jen jednou"
-            onClick={() => setSearch((s) => ({ ...s, dedupe: !s.dedupe }))}
-          >
-            ⛓ Bez duplicit
-          </button>
         </div>
+
+        {showFilters && (
+          <FilterPanel
+            search={search}
+            setSearch={setSearch}
+            listings={listings ?? []}
+            onClose={() => setShowFilters(false)}
+          />
+        )}
       </div>
 
       {scanning && (

@@ -2,15 +2,22 @@ import type { Listing } from "./types";
 
 export interface SearchState {
   query: string;
-  manualOnly: boolean;
-  maxPrice: number | null;
-  maxKm: number | null;
-  minKw: number | null;
-  body: string | null; // "kombi" | "sedan" | ... | null = vše
-  source: string | null; // "sauto" | "sbazar" | ... | null = vše
-  fuel: string | null; // "petrol" | "diesel" | ... | null = vše
+  // přesné rozsahy od–do (null = neomezeno)
+  priceFrom: number | null;
+  priceTo: number | null;
   yearFrom: number | null;
   yearTo: number | null;
+  kmFrom: number | null;
+  kmTo: number | null;
+  kwFrom: number | null;
+  kwTo: number | null;
+  // jednovýběrové filtry (null = vše)
+  transmission: string | null; // "manual" | "auto"
+  drivetrain: string | null; // "fwd" | "rwd" | "awd"
+  fuel: string | null; // "petrol" | "diesel" | ...
+  body: string | null; // "kombi" | "sedan" | ...
+  source: string | null; // "sauto" | "sbazar" | ...
+  // přepínače
   dedupe: boolean; // sloučit stejné auto z víc bazarů do jednoho
   favoritesOnly: boolean;
   showHidden: boolean;
@@ -27,15 +34,19 @@ export function isNew(l: Listing): boolean {
 
 export const EMPTY_SEARCH: SearchState = {
   query: "",
-  manualOnly: false,
-  maxPrice: null,
-  maxKm: null,
-  minKw: null,
-  body: null,
-  source: null,
-  fuel: null,
+  priceFrom: null,
+  priceTo: null,
   yearFrom: null,
   yearTo: null,
+  kmFrom: null,
+  kmTo: null,
+  kwFrom: null,
+  kwTo: null,
+  transmission: null,
+  drivetrain: null,
+  fuel: null,
+  body: null,
+  source: null,
   dedupe: true,
   favoritesOnly: false,
   showHidden: false,
@@ -45,15 +56,19 @@ export const EMPTY_SEARCH: SearchState = {
 export function isSearchActive(s: SearchState): boolean {
   return (
     s.query.trim() !== "" ||
-    s.manualOnly ||
-    s.maxPrice != null ||
-    s.maxKm != null ||
-    s.minKw != null ||
-    s.body != null ||
-    s.source != null ||
-    s.fuel != null ||
+    s.priceFrom != null ||
+    s.priceTo != null ||
     s.yearFrom != null ||
     s.yearTo != null ||
+    s.kmFrom != null ||
+    s.kmTo != null ||
+    s.kwFrom != null ||
+    s.kwTo != null ||
+    s.transmission != null ||
+    s.drivetrain != null ||
+    s.fuel != null ||
+    s.body != null ||
+    s.source != null ||
     s.favoritesOnly ||
     s.newOnly
   );
@@ -106,15 +121,24 @@ export function applySearch(
     if (!s.showHidden && hidden?.has(l.url)) return false;
     if (s.favoritesOnly && !favorites?.has(l.url)) return false;
     if (s.newOnly && !isNew(l)) return false;
-    if (s.manualOnly && l.transmission !== "manual") return false;
-    if (s.maxPrice != null && l.price_czk > s.maxPrice) return false;
-    if (s.maxKm != null && (l.mileage_km == null || l.mileage_km > s.maxKm)) return false;
-    if (s.minKw != null && (l.power_kw == null || l.power_kw < s.minKw)) return false;
-    if (s.body && l.body_type !== s.body) return false;
-    if (s.source && l.source !== s.source) return false;
-    if (s.fuel && l.fuel_type !== s.fuel) return false;
+    // cena
+    if (s.priceFrom != null && l.price_czk < s.priceFrom) return false;
+    if (s.priceTo != null && l.price_czk > s.priceTo) return false;
+    // rok
     if (s.yearFrom != null && (l.year == null || l.year < s.yearFrom)) return false;
     if (s.yearTo != null && (l.year == null || l.year > s.yearTo)) return false;
+    // nájezd
+    if (s.kmFrom != null && (l.mileage_km == null || l.mileage_km < s.kmFrom)) return false;
+    if (s.kmTo != null && (l.mileage_km == null || l.mileage_km > s.kmTo)) return false;
+    // výkon
+    if (s.kwFrom != null && (l.power_kw == null || l.power_kw < s.kwFrom)) return false;
+    if (s.kwTo != null && (l.power_kw == null || l.power_kw > s.kwTo)) return false;
+    // jednovýběrové
+    if (s.transmission && l.transmission !== s.transmission) return false;
+    if (s.drivetrain && l.drivetrain !== s.drivetrain) return false;
+    if (s.fuel && l.fuel_type !== s.fuel) return false;
+    if (s.body && l.body_type !== s.body) return false;
+    if (s.source && l.source !== s.source) return false;
     if (!matchesQuery(l, s.query)) return false;
     return true;
   });

@@ -14,6 +14,15 @@ export interface SearchState {
   dedupe: boolean; // sloučit stejné auto z víc bazarů do jednoho
   favoritesOnly: boolean;
   showHidden: boolean;
+  newOnly: boolean; // jen auta naskočená za posledních NEW_HOURS
+}
+
+// Auto je "nové", pokud ho systém poprvé viděl za posledních 48 h.
+export const NEW_HOURS = 48;
+
+export function isNew(l: Listing): boolean {
+  const age = Date.now() - new Date(l.first_seen).getTime();
+  return age < NEW_HOURS * 3.6e6;
 }
 
 export const EMPTY_SEARCH: SearchState = {
@@ -30,6 +39,7 @@ export const EMPTY_SEARCH: SearchState = {
   dedupe: true,
   favoritesOnly: false,
   showHidden: false,
+  newOnly: false,
 };
 
 export function isSearchActive(s: SearchState): boolean {
@@ -44,7 +54,8 @@ export function isSearchActive(s: SearchState): boolean {
     s.fuel != null ||
     s.yearFrom != null ||
     s.yearTo != null ||
-    s.favoritesOnly
+    s.favoritesOnly ||
+    s.newOnly
   );
 }
 
@@ -94,6 +105,7 @@ export function applySearch(
   return listings.filter((l) => {
     if (!s.showHidden && hidden?.has(l.url)) return false;
     if (s.favoritesOnly && !favorites?.has(l.url)) return false;
+    if (s.newOnly && !isNew(l)) return false;
     if (s.manualOnly && l.transmission !== "manual") return false;
     if (s.maxPrice != null && l.price_czk > s.maxPrice) return false;
     if (s.maxKm != null && (l.mileage_km == null || l.mileage_km > s.maxKm)) return false;

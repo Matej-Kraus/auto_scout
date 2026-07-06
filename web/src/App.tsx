@@ -36,6 +36,7 @@ import {
   clusterListings,
   type Cluster,
   EMPTY_SEARCH,
+  isNew,
   isSearchActive,
   type SearchState,
 } from "./search";
@@ -128,6 +129,10 @@ export function App() {
     () => (listings ?? []).filter((l) => hidden.has(l.url)).length,
     [listings, hidden],
   );
+  const newCount = useMemo(
+    () => (listings ?? []).filter((l) => isNew(l) && !hidden.has(l.url)).length,
+    [listings, hidden],
+  );
 
   // Zmena hledani/filtru resetuje strankovani.
   useEffect(() => setVisibleCount(48), [search, filter]);
@@ -216,6 +221,12 @@ export function App() {
             <>
               <b>{clusters.length}</b> aut ·{" "}
               <b style={{ color: "var(--hot)" }}>{hotCount}</b> hot
+              {newCount > 0 && (
+                <>
+                  {" "}
+                  · <b style={{ color: "var(--good)" }}>{newCount}</b> nových
+                </>
+              )}
               <br />
               {status?.last_run ? `naposledy ${timeAgo(status.last_run)}` : " "}
               {status?.median_days_to_sell != null && (
@@ -344,6 +355,15 @@ export function App() {
               {bodyLabel(bd)}
             </button>
           ))}
+          {newCount > 0 && (
+            <button
+              className={`pill pill-new ${search.newOnly ? "active" : ""}`}
+              title="Jen auta naskočená za posledních 48 h"
+              onClick={() => setSearch((s) => ({ ...s, newOnly: !s.newOnly }))}
+            >
+              🆕 Jen nové<em>{newCount}</em>
+            </button>
+          )}
           <button
             className={`pill ${search.favoritesOnly ? "active" : ""}`}
             title="Jen auta označená hvězdičkou"
@@ -814,6 +834,7 @@ function CarCard({
           </div>
         )}
         <span className="card-rank">{String(rank).padStart(2, "0")}</span>
+        {isNew(listing) && <span className="card-new">NOVÉ</span>}
         <span className="card-actions">
           <button
             className={`starbtn ${isFav ? "on" : ""}`}

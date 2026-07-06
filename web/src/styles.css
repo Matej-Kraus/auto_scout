@@ -938,3 +938,33 @@ body::after {
   opacity: 0.5;
   cursor: wait;
 }
+
+/* ---------- NOVÉ odznak + filtr ---------- */
+.card-new {
+  position: absolute;
+  top: 10px;
+  left: 50px;
+  font-family: var(--cond);
+  font-weight: 900;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: #062b1a;
+  background: var(--good);
+  border-radius: 6px;
+  padding: 2px 8px;
+  box-shadow: 0 0 14px rgba(47, 227, 155, 0.5);
+  animation: newpulse 2s ease-in-out infinite;
+}
+@keyframes newpulse {
+  0%, 100% { box-shadow: 0 0 14px rgba(47, 227, 155, 0.5); }
+  50% { box-shadow: 0 0 22px rgba(47, 227, 155, 0.85); }
+}
+.pill-new.active {
+  background: var(--good);
+  border-color: var(--good);
+  color: #062b1a;
+  box-shadow: 0 0 20px rgba(47, 227, 155, 0.4);
+}
+@media (prefers-reduced-motion: reduce) {
+  .card-new { animation: none; }
+}

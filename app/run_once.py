@@ -42,12 +42,8 @@ def build_scrapers() -> list:
         scrapers.append(KleinanzeigenScraper())
     except Exception:  # noqa: BLE001
         logger.warning("Kleinanzeigen scraper se nenacetl, preskakuji", exc_info=True)
-    try:
-        from app.scrapers.mobilede import MobileDeScraper
-
-        scrapers.append(MobileDeScraper())
-    except Exception:  # noqa: BLE001
-        logger.warning("Mobile.de scraper se nenacetl, preskakuji", exc_info=True)
+    # Mobile.de NENI v hodinovem cronu — Akamai blokuje cloud IP. Bezi zvlast
+    # lokalne z domaci IP (scripts/run_mobilede_local.py, 1x denne).
     return scrapers
 
 

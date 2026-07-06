@@ -9,7 +9,7 @@ import pytest
 
 from app.scrapers.autoscout24 import parse_listings
 from app.scrapers.base import SearchQuery
-from app.scrapers.mobilede import parse_initial_state
+from app.scrapers.mobilede_local import parse_listings as parse_mobilede
 
 FIX = Path(__file__).parent / "fixtures"
 
@@ -39,27 +39,28 @@ def test_autoscout24_raises_on_broken_structure():
         parse_listings({"nope": 1}, query)
 
 
-def test_mobilede_parses_and_filters():
-    query = SearchQuery("bmw_130i", "e87", {"name_includes": ["130i"]})
-    out = parse_initial_state(_load("mobilede_state.json"), query)
-    assert len(out) == 1  # 118d odfiltrovan
+def test_mobilede_parses_real_snapshot():
+    """Proti realnemu HTML snapshotu z mobile.de (ulozeno probe skriptem)."""
+    html = (FIX / "mobilede_snapshot.html").read_text(encoding="utf-8")
+    query = SearchQuery("golf_gti", "mk7", {"year_from": 2013, "year_to": 2020})
+    out = parse_mobilede(html, query)
+    assert len(out) >= 1
     r = out[0]
-    assert r.source_id == "900111"
-    assert r.price == 11900
+    assert r.source == "mobilede"
     assert r.currency == "EUR"
-    assert r.year == 2008
-    assert r.mileage_km == 138000
-    assert "900111" in r.url
+    assert r.price > 500
+    assert r.year is not None and 2013 <= r.year <= 2020
+    assert r.url.startswith("https://suchen.mobile.de/fahrzeuge/details.html?id=")
+    assert r.image_url and r.image_url.startswith("https://img.classistatic.de/")
 
 
-def test_mobilede_accepts_json_string():
-    query = SearchQuery("bmw_130i", "e87", {"name_includes": ["130i"]})
-    raw = (FIX / "mobilede_state.json").read_text(encoding="utf-8")
-    out = parse_initial_state(raw, query)
-    assert len(out) == 1
+def test_mobilede_name_includes_filter():
+    html = (FIX / "mobilede_snapshot.html").read_text(encoding="utf-8")
+    # snapshot jsou Jetty → filtr na "golf" nesmi nic vratit
+    query = SearchQuery("golf_gti", "mk7", {"name_includes": ["golf"]})
+    assert parse_mobilede(html, query) == []
 
 
-def test_mobilede_raises_on_broken_structure():
-    query = SearchQuery("bmw_130i", "e87", {})
-    with pytest.raises(RuntimeError):
-        parse_initial_state({"search": {}}, query)
+def test_mobilede_empty_html():
+    query = SearchQuery("golf_gti", "mk7", {})
+    assert parse_mobilede("<html><body>nic</body></html>", query) == []

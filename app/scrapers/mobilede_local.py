@@ -19,10 +19,12 @@ portal_params["mobilede"] (volitelné; jinak se odvodí z watch labelu):
 
 from __future__ import annotations
 
+import html as html_mod
 import logging
 import random
 import re
 import time
+from pathlib import Path
 
 from app.scrapers.base import RawListing, Scraper, SearchQuery
 
@@ -30,11 +32,30 @@ logger = logging.getLogger(__name__)
 
 BASE = "https://suchen.mobile.de"
 DELAY_RANGE = (25.0, 60.0)  # dlouhe pauzy mezi watchi — 1x denne nespechame
+GOTO_ATTEMPTS = 3  # Akamai challenge je pravdepodobnostni → par pokusu
+# Trvaly profil prohlizece: jednou vyresena Akamai challenge ulozi _abck cookie,
+# takze dalsi behy uz projdou bez challenge (jako vraceny navstevnik).
+_PROFILE_DIR = Path.home() / ".carscout" / "mobilede-profile"
 
-_PRICE_RE = re.compile(r"([\d.\s]{3,})\s*€")
-_KM_RE = re.compile(r"([\d.\s]{2,})\s*km", re.IGNORECASE)
+# Vysledovka mobile.de je Next.js — jeden inzerat zacina data-testid
+# "listing-title-card-view". V bloku pak: cena (price-label), atributy
+# (EZ MM/RRRR • km • kW • palivo), obrazek (img.classistatic.de), odkaz details.html.
+_BLOCK_SPLIT = re.compile(r'(?=data-testid="listing-title-card-view")')
+# Nazev = hlavni ("Volkswagen Golf") + podtitul z title="..." atributu
+# ("GTI 2.0 TSI DSG"). Podtitul nese motorizaci → klicovy pro name_includes.
+_TITLE_RE = re.compile(r'data-testid="listing-title-card-view"[^>]*>(.*?)</span>', re.S)
+_SUBTITLE_RE = re.compile(r'class="ListingTitle-module__[^"]*subTitle"[^>]*title="([^"]*)"')
+_PRICE_RE = re.compile(r'data-testid="price-label"[^>]*>(.*?)</span>', re.S)
+_ATTR_RE = re.compile(
+    r'data-testid="listing-details-attributes"[^>]*>(.*?)'
+    r'(?=data-testid="seller-info"|data-testid="listing-action)',
+    re.S,
+)
+_HREF_RE = re.compile(r'href="([^"]*details\.html[^"]*)"')
+_IMG_RE = re.compile(r'src="(https://img\.classistatic\.de/[^"\s]+)"')
+_ID_RE = re.compile(r"[?&]id=(\d+)")
 _EZ_RE = re.compile(r"EZ\s*(?:\d{2}/)?((?:19|20)\d{2})")
-_ID_RE = re.compile(r"id=(\d+)")
+_KM_RE = re.compile(r"([\d.]{2,})\s*km", re.IGNORECASE)
 
 
 class MobileDeLocalScraper(Scraper):
@@ -56,25 +77,36 @@ class MobileDeLocalScraper(Scraper):
             return []
 
         url = _build_url(query)
+        _PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+        page_html: str | None = None
         with sync_playwright() as pw:
-            browser = pw.firefox.launch(headless=True)
-            ctx = browser.new_context(locale="de-DE", viewport={"width": 1440, "height": 900})
-            page = ctx.new_page()
+            # persistent context = trvaly profil (cookies _abck z vyresene challenge)
+            ctx = pw.firefox.launch_persistent_context(
+                str(_PROFILE_DIR),
+                headless=True,
+                locale="de-DE",
+                viewport={"width": 1440, "height": 900},
+            )
+            page = ctx.pages[0] if ctx.pages else ctx.new_page()
             try:
-                page.goto(url, wait_until="domcontentloaded", timeout=45000)
-                page.wait_for_timeout(8000)
-                title = page.title()
-                if "verweigert" in title.lower() or "denied" in title.lower() or not title:
-                    # Akamai challenge — mekky skip, zadny alert (obcasny stav).
-                    logger.warning("mobilede[%s]: Akamai challenge, preskakuji", query.model)
-                    self._challenged = True
-                    return []
-                items = _harvest(page)
+                for attempt in range(1, GOTO_ATTEMPTS + 1):
+                    page.goto(url, wait_until="domcontentloaded", timeout=45000)
+                    page.wait_for_timeout(8000)  # nech Akamai JS dobehnout
+                    title = page.title()
+                    if title and "verweigert" not in title.lower() and "denied" not in title.lower():
+                        page_html = page.content()
+                        break
+                    logger.info("mobilede[%s]: challenge, pokus %d/%d", query.model, attempt, GOTO_ATTEMPTS)
+                    page.wait_for_timeout(random.uniform(5000, 12000))
             finally:
-                browser.close()
+                ctx.close()
 
-        raws = [_to_raw(it, query) for it in items]
-        raws = [r for r in raws if r is not None]
+        if page_html is None:
+            logger.warning("mobilede[%s]: Akamai challenge i po %d pokusech, preskakuji", query.model, GOTO_ATTEMPTS)
+            self._challenged = True
+            return []
+
+        raws = parse_listings(page_html, query)
         logger.info("mobilede[%s]: %d inzeratu", query.model, len(raws))
         time.sleep(random.uniform(*DELAY_RANGE))
         return raws
@@ -97,83 +129,85 @@ def _build_url(query: SearchQuery) -> str:
     return "&".join(parts)
 
 
-def _harvest(page) -> list[dict]:
-    """Obecný sběr výsledků: najdi odkazy na details.html a vytáhni okolní data."""
-    return page.evaluate(
-        """() => {
-        const seen = new Set();
-        const out = [];
-        for (const a of document.querySelectorAll('a[href*="details.html"]')) {
-            const href = a.href;
-            if (seen.has(href)) continue;
-            seen.add(href);
-            // vyjed nahoru na kontejner vysledku (max 6 urovni)
-            let node = a;
-            for (let i = 0; i < 6 && node.parentElement; i++) {
-                node = node.parentElement;
-                if ((node.innerText || '').includes('€')) break;
-            }
-            const img = node.querySelector('img[src*="mobile.de"], img[src^="https"]');
-            out.push({
-                href,
-                text: (node.innerText || '').slice(0, 600),
-                img: img ? img.src : null,
-            });
-        }
-        return out;
-    }"""
-    )
+def _clean(fragment: str) -> str:
+    """HTML fragment → čistý text (bez tagů, dekódované entity, sjednocené mezery)."""
+    text = re.sub(r"<[^>]+>", " ", fragment)
+    text = html_mod.unescape(text).replace("\xa0", " ")
+    return re.sub(r"\s+", " ", text).strip()
 
 
-def _to_raw(item: dict, query: SearchQuery) -> RawListing | None:
-    text = item.get("text") or ""
-    href = item.get("href") or ""
-    m_id = _ID_RE.search(href)
-    if not m_id:
-        return None
-
-    m_price = _PRICE_RE.search(text)
-    if not m_price:
-        return None
-    price = int(re.sub(r"[^\d]", "", m_price.group(1)) or 0)
-    if price < 500:  # sponzorovane bloky/reklamy
-        return None
-
-    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-    title = lines[0][:200] if lines else "mobile.de inzerat"
-    low = title.lower()
+def parse_listings(page_html: str, query: SearchQuery) -> list[RawListing]:
+    """Rozparsuje HTML výsledovky mobile.de na RawListing. Testovatelné bez sítě."""
+    blocks = _BLOCK_SPLIT.split(page_html)
     params = query.params
-    for needle in params.get("name_includes", []):
-        if needle.lower() not in low:
-            return None
+    name_includes = [s.lower() for s in params.get("name_includes", [])]
+    out: list[RawListing] = []
+    seen: set[str] = set()
 
-    m_year = _EZ_RE.search(text)
-    year = int(m_year.group(1)) if m_year else None
-    if year is not None:
-        if params.get("year_from") and year < params["year_from"]:
-            return None
-        if params.get("year_to") and year > params["year_to"]:
-            return None
-    elif params.get("year_from") or params.get("year_to"):
-        return None
+    for blk in blocks:
+        title_m = _TITLE_RE.search(blk)
+        price_m = _PRICE_RE.search(blk)
+        href_m = _HREF_RE.search(blk)
+        if not (title_m and price_m and href_m):
+            continue
 
-    m_km = _KM_RE.search(text)
-    km = int(re.sub(r"[^\d]", "", m_km.group(1)) or 0) if m_km else None
-    if km is not None and not (1_000 <= km <= 1_000_000):
+        href = html_mod.unescape(href_m.group(1))
+        id_m = _ID_RE.search(href)
+        if not id_m or id_m.group(1) in seen:
+            continue
+        source_id = id_m.group(1)
+
+        title = _clean(title_m.group(1))
+        sub_m = _SUBTITLE_RE.search(blk)
+        if sub_m:
+            title = f"{title} {html_mod.unescape(sub_m.group(1))}".strip()
+        low = title.lower()
+        if name_includes and not all(n in low for n in name_includes):
+            continue
+
+        price = int(re.sub(r"[^\d]", "", _clean(price_m.group(1))) or 0)
+        if price < 500:  # sponzorovaný blok / bez ceny
+            continue
+
+        attrs_m = _ATTR_RE.search(blk)
+        attrs = _clean(attrs_m.group(1)) if attrs_m else ""
+
+        year = None
+        ez = _EZ_RE.search(attrs)
+        if ez:
+            year = int(ez.group(1))
+        if year is not None:
+            if params.get("year_from") and year < params["year_from"]:
+                continue
+            if params.get("year_to") and year > params["year_to"]:
+                continue
+        elif params.get("year_from") or params.get("year_to"):
+            continue
+
         km = None
+        km_m = _KM_RE.search(attrs)
+        if km_m:
+            val = int(re.sub(r"[^\d]", "", km_m.group(1)) or 0)
+            if 1_000 <= val <= 1_000_000:
+                km = val
 
-    return RawListing(
-        source="mobilede",
-        source_id=m_id.group(1),
-        title=title,
-        url=href.split("?")[0] + f"?id={m_id.group(1)}",
-        price=price,
-        currency="EUR",
-        year=year,
-        mileage_km=km,
-        transmission_text=text[:300],
-        drivetrain_text=title,
-        fuel_text=text[:300],
-        image_url=item.get("img"),
-        raw={"text": text[:400]},
-    )
+        img_m = _IMG_RE.search(blk)
+        seen.add(source_id)
+        out.append(
+            RawListing(
+                source="mobilede",
+                source_id=source_id,
+                title=title,
+                url=f"{BASE}/fahrzeuge/details.html?id={source_id}",
+                price=price,
+                currency="EUR",
+                year=year,
+                mileage_km=km,
+                transmission_text=attrs,  # normalize vytáhne manual/automat
+                drivetrain_text=title,
+                fuel_text=attrs,  # Benzin/Diesel je v atributech
+                image_url=img_m.group(1) if img_m else None,
+                raw={"attrs": attrs},
+            )
+        )
+    return out

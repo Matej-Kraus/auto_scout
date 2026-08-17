@@ -24,6 +24,20 @@ from app.models import WatchRow
 _APPROX_CZK_PER_EUR = 24.0
 
 
+def _infer_fuel_bmw(model: str) -> str | None:
+    """BMW modelove cislo koncici na "i"/"d" prozradi palivo ("320i"/"320d").
+
+    Potreba pro mobile.de, kde je "320" jeden spolecny model bucket pro
+    vsechny motorizace (na rozdil od Sauto/AS24, kde se to resi jinak).
+    """
+    low = model.strip().lower()
+    if re.match(r"^\d{3}d$", low):
+        return "diesel"
+    if re.match(r"^\d{3}i$", low):
+        return "petrol"
+    return None
+
+
 def slugify(text: str) -> str:
     """'Škoda' -> 'skoda', 'Golf GTI' -> 'golf-gti'."""
     norm = unicodedata.normalize("NFKD", text)
@@ -145,8 +159,18 @@ def build_watch(row: WatchRow) -> Watch:
     if row.price_from_czk:
         ka["price_from"] = int(row.price_from_czk / _APPROX_CZK_PER_EUR)
 
-    # mobile.de (jen lokalni denni beh, viz scrapers/mobilede_local.py)
-    mobilede: dict = {"text": " ".join(x for x in (make, model, variant) if x)}
+    # mobile.de (jen lokalni denni beh, viz scrapers/mobilede_local.py). make/model
+    # umozni presny filtr pres _resolve_ids; "text" je jen fallback pro znacky/modely,
+    # ktere (zatim) neumime prelozit na interni ID mobile.de.
+    mobilede: dict = {
+        "make": make,
+        "model": model,
+        "text": " ".join(x for x in (make, model, variant) if x),
+    }
+    if make.strip().upper() == "BMW":
+        fuel = _infer_fuel_bmw(model)
+        if fuel:
+            mobilede["fuel"] = fuel
     for key in ("name_includes", "year_from", "year_to", "price_to"):
         if key in ka:
             mobilede[key] = ka[key]

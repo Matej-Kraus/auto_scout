@@ -42,6 +42,16 @@ const BODY_LABELS: Record<string, string> = {
 };
 export const bodyLabel = (b: string | null) => (b ? BODY_LABELS[b] ?? b : "—");
 
+// Portalovo vlastni hodnoceni ceny (mobile.de "Fairer Preis"/"Hoher Preis" apod.)
+// — vedlejsi signal k nasemu deal_score, ne nahrada.
+const PRICE_RATING_LABELS: Record<string, string> = {
+  great: "skvělá cena",
+  good: "dobrá cena",
+  fair: "férová cena",
+  high: "vysoká cena",
+};
+export const priceRatingLabel = (r: string | null) => (r ? PRICE_RATING_LABELS[r] ?? r : null);
+
 export const kw = (n: number | null) => (n == null ? null : `${n} kW`);
 
 export const sourceLabel = (s: string) =>

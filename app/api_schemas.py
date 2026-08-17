@@ -19,6 +19,7 @@ class ListingOut(BaseModel):
     fuel_type: str | None
     power_kw: int | None = None
     body_type: str | None = None
+    price_rating: str | None = None
     price_czk: int
     currency: str
     url: str

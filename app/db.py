@@ -7,7 +7,7 @@ from contextlib import contextmanager
 
 import logging
 
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import settings
@@ -15,13 +15,24 @@ from app.models import Base
 
 logger = logging.getLogger(__name__)
 
+_is_sqlite = settings.database_url.startswith("sqlite")
 # SQLite chce check_same_thread=False kvuli pripadnemu sdileni napric vlakny.
-_connect_args = (
-    {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
-)
+_connect_args = {"check_same_thread": False} if _is_sqlite else {}
 
 engine = create_engine(settings.database_url, connect_args=_connect_args, future=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+
+if _is_sqlite:
+    # WAL misto vychoziho rollback-journalu: zapisovac (dailylocal skript) a
+    # ctenar (dashboard/uvicorn bezici soubezne) se pak navzajem neblokuji.
+    # busy_timeout: kdyz uz dva zapisy koliduji, radeji chvili pockat nez
+    # rovnou spadnout na "database is locked".
+    @event.listens_for(engine, "connect")
+    def _sqlite_pragmas(dbapi_connection, _record) -> None:
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA busy_timeout=30000")
+        cursor.close()
 
 
 # Sloupce pridane po prvnim nasazeni — lehka migrace (create_all neresi ALTER).
@@ -31,6 +42,7 @@ _ADDED_COLUMNS = {
     "fuel_type": "VARCHAR(16)",
     "power_kw": "INTEGER",
     "body_type": "VARCHAR(16)",
+    "price_rating": "VARCHAR(16)",
 }
 
 

@@ -16,7 +16,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-playwright = ["playwright>=1.44"]
+# Pinned na 0.3.12 - posledni verze Scrapling, jejiz StealthyFetcher jeste jede
+# na Camoufoxu (zpevneny Firefox). Od 0.3.13 StealthyFetcher prepnuli na
+# patchright/Chromium, ktereho Akamai na mobile.de blokuje uz na TLS urovni
+# (overeno scripts/mobilede_probe.py) - viz komentar v app/scrapers/mobilede_local.py.
+scrapling = ["scrapling[fetchers]==0.3.12"]
 dev = [
     "pytest>=8.2",
     "ruff>=0.4",

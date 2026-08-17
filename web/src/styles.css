@@ -593,6 +593,35 @@ body::after {
   font-size: 11px;
   color: var(--text-faint);
 }
+.card-price-group {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.price-rating {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line-bright);
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.price-rating-great,
+.price-rating-good {
+  color: var(--good);
+  border-color: rgba(47, 227, 155, 0.4);
+}
+.price-rating-fair {
+  color: var(--fair);
+  border-color: rgba(255, 210, 63, 0.4);
+}
+.price-rating-high {
+  color: var(--hot);
+  border-color: rgba(255, 59, 48, 0.4);
+}
 .card-foot {
   display: flex;
   align-items: center;

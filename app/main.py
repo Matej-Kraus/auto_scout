@@ -73,6 +73,7 @@ def _to_out(lst: Listing, score) -> ListingOut:
         fuel_type=lst.fuel_type,
         power_kw=lst.power_kw,
         body_type=lst.body_type,
+        price_rating=lst.price_rating,
         price_czk=lst.price_czk,
         currency=lst.currency,
         url=lst.url,
@@ -161,12 +162,9 @@ def status() -> StatusOut:
         total = session.scalar(select(func.count(Listing.id))) or 0
 
         # Jak rychle dobre kusy mizi: median dnu first_seen->last_seen u zmizelych.
-        gone = session.scalars(
-            select(Listing).where(Listing.is_active.is_(False))
-        ).all()
+        gone = session.scalars(select(Listing).where(Listing.is_active.is_(False))).all()
         days = sorted(
-            max((lst.last_seen - lst.first_seen).total_seconds() / 86400, 0.0)
-            for lst in gone
+            max((lst.last_seen - lst.first_seen).total_seconds() / 86400, 0.0) for lst in gone
         )
         median_days = days[len(days) // 2] if days else None
 
@@ -299,9 +297,7 @@ def delete_watch(watch_id: int, purge: bool = False) -> dict:
         if row is None:
             raise HTTPException(status_code=404, detail="Watch nenalezen")
         if purge:
-            for lst in session.scalars(
-                select(Listing).where(Listing.model == row.model_key)
-            ).all():
+            for lst in session.scalars(select(Listing).where(Listing.model == row.model_key)).all():
                 session.delete(lst)
         session.delete(row)
         session.commit()
@@ -334,9 +330,7 @@ def trigger_run(
 
         if refresh and model_key:
             # smaz stara data toho auta → prohledani je od nuly (zadne "duchy")
-            for lst in session.scalars(
-                select(Listing).where(Listing.model == model_key)
-            ).all():
+            for lst in session.scalars(select(Listing).where(Listing.model == model_key)).all():
                 session.delete(lst)
             session.flush()
 
@@ -356,5 +350,3 @@ def trigger_run(
         sent = process_alerts(session, diff)
         session.commit()
     return {"status": "ok", "summary": diff.summary, "alerts": sent}
-
-

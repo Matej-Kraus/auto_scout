@@ -10,6 +10,7 @@ export interface Listing {
   fuel_type: string | null;
   power_kw: number | null;
   body_type: string | null;
+  price_rating: string | null; // "great" | "good" | "fair" | "high" — jen kde to portal nabizi
   price_czk: number;
   currency: string;
   url: string;

@@ -1,10 +1,11 @@
-"""Denní LOKÁLNÍ běh mobile.de (rezidenční IP) → zapisuje do stejné DB jako cron.
+"""Ruční/diagnostický běh JEN mobile.de (rezidenční IP).
 
     python -m scripts.run_mobilede_local
 
-Spouští launchd 1× denně (viz deploy/com.carscout.mobilede.plist a README).
-Vyžaduje: pip install -e ".[playwright]" && python -m playwright install firefox
-a DATABASE_URL v .env mířící na stejnou DB jako GitHub Actions (Neon).
+Denní automat pro VŠECHNY portály (včetně mobile.de) je
+`scripts/run_daily_local.py` (viz deploy/com.carscout.dailylocal.plist) — tenhle
+skript použij jen když chceš izolovaně dotáhnout/oladit mobile.de samotné.
+Vyžaduje: pip install -e ".[scrapling]" && scrapling install.
 
 Watche bez explicitních portal_params["mobilede"] dostanou parametry odvozené
 z kleinanzeigen bloku (text, roky, cena v EUR) — jednou definuješ, všude hledá.

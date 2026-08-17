@@ -21,6 +21,7 @@ import {
   km,
   kw,
   pct,
+  priceRatingLabel,
   sourceLabel,
   timeAgo,
   transmissionLabel,
@@ -779,11 +780,21 @@ function CarCard({
           {listing.body_type && <span>{bodyLabel(listing.body_type)}</span>}
         </div>
         <div className="card-priceline">
-          <span className="card-price">{czk(listing.price_czk)}</span>
-          {below != null && below > 0 ? (
-            <span className="card-below">−{below} %</span>
-          ) : (
-            <span className="card-inprice">v ceně</span>
+          <span className="card-price-group">
+            <span className="card-price">{czk(listing.price_czk)}</span>
+            {below != null && below > 0 ? (
+              <span className="card-below">−{below} %</span>
+            ) : (
+              <span className="card-inprice">v ceně</span>
+            )}
+          </span>
+          {listing.price_rating && (
+            <span
+              className={`price-rating price-rating-${listing.price_rating}`}
+              title="Hodnocení ceny podle bazaru (doplňkový signál k našemu skóre)"
+            >
+              {priceRatingLabel(listing.price_rating)}
+            </span>
           )}
         </div>
         <div className="card-foot">

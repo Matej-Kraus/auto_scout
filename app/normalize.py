@@ -16,6 +16,17 @@ _AWD_HINTS = ("quattro", "4motion", "4x4", "awd", "allrad", "xdrive", "4wd", "4m
 _RWD_HINTS = ("rwd", "zadni", "zadní", "hinterrad", "heckantrieb")
 _FWD_HINTS = ("fwd", "predni", "přední", "frontantrieb", "vorderrad")
 
+# --- portalovo vlastni hodnoceni ceny vuci trhu (napr. mobile.de badge "Fairer
+# Preis"/"Hoher Preis") - normalizuje se na jazykove nezavislou skalu. Poradi
+# zaleze (nejdriv "sehr" varianty, jinak by je chytilo obecne "gut"/"hoch").
+_PRICE_RATING_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("great", ("sehr guter preis", "top preis", "great price", "top-preis")),
+    ("good", ("guter preis", "good price")),
+    ("fair", ("fairer preis", "fair price", "reasonable price")),
+    ("high", ("sehr hoher preis", "very high price")),
+    ("high", ("hoher preis", "high price")),
+)
+
 # --- mapovani paliva (poradi = priorita; hybrid/elektro pred benzinem) ---
 _FUEL_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("electric", ("elektro", "electric", "elektrisch", "ev ")),
@@ -67,6 +78,17 @@ def parse_fuel(text: str | None) -> str | None:
     for fuel, hints in _FUEL_HINTS:
         if any(h in low for h in hints):
             return fuel
+    return None
+
+
+def parse_price_rating(text: str | None) -> str | None:
+    """ "Fairer Preis"/"Hoher Preis" apod. -> "great"|"good"|"fair"|"high" (jazykove nezavisle)."""
+    if not text:
+        return None
+    low = text.lower()
+    for rating, hints in _PRICE_RATING_HINTS:
+        if any(h in low for h in hints):
+            return rating
     return None
 
 
@@ -157,13 +179,12 @@ def normalize(raw: RawListing, model: str, generation: str) -> dict:
         "generation": generation,
         "year": parse_year(raw.year),
         "mileage_km": parse_int(raw.mileage_km),
-        "transmission": parse_transmission(
-            raw.transmission_text or raw.title
-        ),
+        "transmission": parse_transmission(raw.transmission_text or raw.title),
         "drivetrain": parse_drivetrain(raw.drivetrain_text or raw.title, model),
         "fuel_type": parse_fuel(raw.fuel_text or raw.title),
         "power_kw": parse_power_kw(raw.power_text or raw.title),
         "body_type": parse_body(raw.body_text or raw.title),
+        "price_rating": parse_price_rating(raw.price_rating_text),
         "price_czk": price_czk,
         "price_original": price_original,
         "currency": raw.currency.upper(),

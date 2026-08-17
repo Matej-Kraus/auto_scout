@@ -29,9 +29,12 @@ Pak **Actions → hunt → Run workflow** (první ostrý běh naplní Neon).
 Až Akamai flag vyprchá (netestuj opakovaně!):
 ```bash
 python -m scripts.mobilede_probe        # když napíše ÚSPĚCH, pokračuj:
-cp deploy/com.carscout.mobilede.plist ~/Library/LaunchAgents/
-launchctl load ~/Library/LaunchAgents/com.carscout.mobilede.plist
+cp deploy/com.carscout.dailylocal.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.carscout.dailylocal.plist
 ```
+(Spustí denně `scripts.run_daily_local` — všechny portály + mobile.de do
+`DATABASE_URL` z `.env`; nastav ho na stejný Neon string jako v kroku 1, ať se
+to sejde s cloudovým cronem.)
 
 ---
 

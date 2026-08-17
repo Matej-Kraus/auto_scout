@@ -42,6 +42,7 @@ class RawListing:
     fuel_text: str | None = None  # syrovy text paliva (napr. "Benzín" / "Diesel")
     power_text: str | None = None  # syrovy text s vykonem (napr. "180 kW")
     body_text: str | None = None  # syrovy text karoserie (napr. "Kombi")
+    price_rating_text: str | None = None  # portalovo vlastni hodnoceni ceny (napr. "Fairer Preis")
     image_url: str | None = None  # nahledovy obrazek (prvni foto)
     raw: dict = field(default_factory=dict)  # cela odpoved pro pripadny dalsi parsing
 

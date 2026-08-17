@@ -48,7 +48,9 @@ def run_pipeline(
             query = SearchQuery.from_watch(watch, scraper.name)
             try:
                 raws = scraper.fetch_listings(query)
-            except Exception as exc:  # noqa: BLE001 — jeden zdroj selze, ostatni jedou (CLAUDE.md §8)
+            except (
+                Exception
+            ) as exc:  # noqa: BLE001 — jeden zdroj selze, ostatni jedou (CLAUDE.md §8)
                 logger.exception("scraper %s spadl pro watch %s", scraper.name, watch.key)
                 diff.failures.append((scraper.name, watch.key, str(exc)[:200]))
                 continue
@@ -99,6 +101,7 @@ def _upsert(session: Session, raw: RawListing, watch: Watch):
         "fuel_type",
         "power_kw",
         "body_type",
+        "price_rating",
         "title",
         "url",
         "image_url",
@@ -109,9 +112,7 @@ def _upsert(session: Session, raw: RawListing, watch: Watch):
     if data["price_czk"] != old_price:
         existing.price_czk = data["price_czk"]
         existing.price_original = data["price_original"]
-        session.add(
-            PriceHistory(listing_id=existing.id, price_czk=data["price_czk"], seen_at=now)
-        )
+        session.add(PriceHistory(listing_id=existing.id, price_czk=data["price_czk"], seen_at=now))
         if data["price_czk"] < old_price:
             change = ("price_drop", old_price)
 
@@ -144,8 +145,6 @@ def record_alert(session: Session, listing: Listing, kind: str, score: float) ->
 def already_alerted(session: Session, listing: Listing, kind: str) -> bool:
     """True pokud uz pro tento listing+kind alert odesel (anti-spam)."""
     return (
-        session.scalar(
-            select(Alert.id).where(Alert.listing_id == listing.id, Alert.kind == kind)
-        )
+        session.scalar(select(Alert.id).where(Alert.listing_id == listing.id, Alert.kind == kind))
         is not None
     )

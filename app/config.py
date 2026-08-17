@@ -34,9 +34,9 @@ def normalize_db_url(v: object) -> str:
     s = s.strip("'").strip('"').strip()
 
     if s.startswith("postgresql://"):
-        s = "postgresql+psycopg://" + s[len("postgresql://"):]
+        s = "postgresql+psycopg://" + s[len("postgresql://") :]
     elif s.startswith("postgres://"):
-        s = "postgresql+psycopg://" + s[len("postgres://"):]
+        s = "postgresql+psycopg://" + s[len("postgres://") :]
 
     try:
         make_url(s)
@@ -167,6 +167,14 @@ WATCHES: list[Watch] = [
                 "year_to": 2013,
                 "price_to": 18_000,  # EUR
             },
+            "mobilede": {
+                "make": "BMW",
+                "model": "130i",  # _resolve_ids orizne na "130" (mobile.de nema motorizace v modelu)
+                "name_includes": ["130i"],
+                "year_from": 2005,
+                "year_to": 2013,
+                "price_to": 18_000,  # EUR
+            },
         },
     ),
     Watch(
@@ -202,6 +210,14 @@ WATCHES: list[Watch] = [
             },
             "kleinanzeigen": {
                 "search_slug": "audi-s3",
+                "name_includes": ["s3"],
+                "year_from": 2006,
+                "year_to": 2013,
+                "price_to": 18_000,  # EUR
+            },
+            "mobilede": {
+                "make": "AUDI",
+                "model": "S3",
                 "name_includes": ["s3"],
                 "year_from": 2006,
                 "year_to": 2013,
@@ -246,6 +262,15 @@ WATCHES: list[Watch] = [
                 "year_from": 2012,
                 "year_to": 2020,
                 "price_to": 18_000,  # EUR
+            },
+            "mobilede": {
+                "make": "VW",
+                "model": "Golf",  # pokryva vsechny Golfy - GTI hlida power_from_kw
+                "power_from_kw": 162,  # GTI ma vzdy >=162 kW (220 PS); spolehlivejsi nez "gti" v titulku
+                "year_from": 2013,
+                "year_to": 2019,
+                "price_to": 15_000,  # EUR
+                "transmission": "manual",
             },
         },
     ),

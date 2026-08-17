@@ -1,20 +1,60 @@
-"""Mobile.de scraper pro LOKÁLNÍ běh (rezidenční IP) přes Playwright Firefox.
+"""Mobile.de scraper pro LOKÁLNÍ běh (rezidenční IP) přes Scrapling StealthyFetcher.
 
-Mobile.de chrání Akamai s behavioral challenge + reputací IP — z cloudu (GitHub
-Actions) neprůchodné, z domácí IP Firefoxem to projde (ověřeno 7/2026, jeden
-čistý průchod; Chromium je detekovaný vždy). Proto:
+Mobile.de chrání Akamai: síťová/TLS vrstva blokuje Chromium okamžitě (403 bez
+JS challenge), zpevněný Firefox (Camoufox) ji projde a dostane se k
+behaviorální JS výzvě, kterou vyřeší jako reálný prohlížeč (ověřeno 8/2026).
+Proto vyžaduje `scrapling[fetchers]==0.3.12` — poslední verze, jejíž
+StealthyFetcher ještě jede na Camoufoxu; od 0.3.13 přešli na patchright
+(patchnuté Chromium), které tu selže stejně jako čistý Playwright Chromium.
+Diagnostika obou slepých uliček (Chromium i curl_cffi bez JS): `scripts/mobilede_probe.py`.
 
-  - NEběží v hodinovém cronu; spouští ho `scripts/run_mobilede_local.py`
-    (launchd na uživatelově Macu, 1× denně) a zapisuje do stejné DB.
+  - NEběží v hodinovém cronu; spouští ho `scripts/run_daily_local.py`
+    (launchd na uživatelově Macu, 1× denně, spolu s ostatními portály) a
+    zapisuje do stejné DB.
   - Jeden požadavek na watch + dlouhé pauzy; při challenge měkce přeskočí
     (žádný failure alert — občasná blokace je očekávaný stav).
 
-Parser je záměrně obecný (harvest z DOM přes odkazy na details.html), protože
-markup se mění a JSON zdroj (__INITIAL_STATE__) už neexistuje.
+Parser je záměrně obecný (harvest z odkazů na details.html, ne z jednoho
+konkrétního data-testid), protože markup se mění — mezi dvěma běhy v 8/2026
+mobile.de tiše přejmenoval kartu inzerátu z "listing-title-card-view" na
+"result-listing-N" a starý parser by na nové variantě dostal 0 shod.
 
-portal_params["mobilede"] (volitelné; jinak se odvodí z watch labelu):
-  text        — fulltext do modelDescription.modelDescription
+DŮLEŽITÉ (oprava 8/2026): fulltext hledání (`modelDescription.modelDescription`)
+mobile.de při kanonizaci URL tiše ZAHODÍ — výsledná stránka je pak "nejnovější
+auta v ceně/roce" bez filtru na značku/model, takže name_includes na první
+stránce skoro nikdy nic nenajde (proto předtím 0 inzerátů i u BMW 130i/Audi S3/
+Golf GTI, i když jich na trhu reálně je spousta). Skutečný filtr chce
+strukturované `makeModelVariant1.makeId`/`.modelId` (numerické, interní ID
+mobile.de — zjištěno z <select name="mk"/"md"> na search formu, viz
+scripts/mobilede_probe.py). Proto: pokud portal_params["mobilede"] obsahuje
+make+model, který umíme přeložit (_MAKE_IDS/_MODEL_IDS níže), použije se
+strukturovaný filtr; jinak fallback na starý fulltext (degradovaný, ale funkční
+pro necílené watche).
+
+portal_params["mobilede"]:
+  make, model    — pro presny filtr (napr. "VW"/"Golf", "BMW"/"130i") — viz _resolve_ids
+  text           — fallback fulltext, pouzije se jen kdyz make/model nejde prelozit
+  name_includes  — klientska pojistka (napr. "gti"/"s3") — nutna, model "Golf"/"320" pokryva vic motorizaci
   year_from/to, price_to (EUR)
+  transmission   — "manual" zahodi inzeraty, kde title+atributy vyzni jako automat
+                   (DSG/Automatik/Tiptronic apod.). Filtr prevodovky v UI mobile.de
+                   je schovany v modalu bez stabilniho URL parametru (overeno), takze
+                   se resi az po stazeni pres app.normalize.parse_transmission.
+  power_from_kw  — zahodi inzeraty se znamym vykonem pod tuto hranici (kW).
+                   Spolehlivejsi nez name_includes na "gti"/"m3" apod. — vykon je
+                   v atributech skoro vzdy, title se pise kazdy jinak. Stejny
+                   duvod jako u transmission: filtr vykonu je taky jen v modalu.
+  fuel           — "petrol"/"diesel"/... (viz normalize._FUEL_HINTS). Zahodi
+                   nesedici palivo — pro modely, kde mobile.de miha vic motorizaci
+                   pod jednim cislem (napr. BMW "320" = 320i i 320d dohromady).
+
+Poznamka k razeni: kdykoli je nastaveny power_from_kw/transmission/fuel/
+name_includes (= filtrujeme uzsi trim v ramci sirsiho "model" bucketu), radi se
+podle ceny sestupne misto "nejnovejsi" — hledany trim je typicky drazsi nez
+zaklad stejneho modelu, takze se v ramci nasi strankove kapacity (MAX_PAGES)
+nakupi driv. Bez toho by "nejnovejsi" razeni bylo z valne vetsiny zaklad. verze
+a hledany trim by se ztratil hluboko ve strankach (overeno na Golf GTI: 6 → 36
+nalezenych po prechodu na razeni cenou).
 """
 
 from __future__ import annotations
@@ -24,7 +64,9 @@ import logging
 import random
 import re
 import time
+import unicodedata
 
+from app.normalize import parse_fuel, parse_power_kw, parse_transmission
 from app.scrapers.base import RawListing, Scraper, SearchQuery
 
 logger = logging.getLogger(__name__)
@@ -35,15 +77,42 @@ BASE = "https://suchen.mobile.de"
 # aby se stihla reputace srovnat. Po prvni challenge uz dalsi watche nezkousime.
 DELAY_RANGE = (60.0, 120.0)
 
-# Vysledovka mobile.de je Next.js — jeden inzerat zacina data-testid
-# "listing-title-card-view". V bloku pak: cena (price-label), atributy
-# (EZ MM/RRRR • km • kW • palivo), obrazek (img.classistatic.de), odkaz details.html.
-_BLOCK_SPLIT = re.compile(r'(?=data-testid="listing-title-card-view")')
-# Nazev = hlavni ("Volkswagen Golf") + podtitul z title="..." atributu
-# ("GTI 2.0 TSI DSG"). Podtitul nese motorizaci → klicovy pro name_includes.
-_TITLE_RE = re.compile(r'data-testid="listing-title-card-view"[^>]*>(.*?)</span>', re.S)
-_SUBTITLE_RE = re.compile(r'class="ListingTitle-module__[^"]*subTitle"[^>]*title="([^"]*)"')
+# Jeden inzerat = jeden <a href="...details.html?id=...">...</a> odkaz (stabilni
+# napric variantami markupu, na rozdil od konkretniho data-testid karty, ktery
+# se mezi variantami lisi - "listing-title-card-view" vs "result-listing-N").
+_BLOCK_SPLIT = re.compile(r'(?=<a\b[^>]*href="[^"]*details\.html\?id=\d+[^"]*"[^>]*>)')
+# Nazev = hlavni ("Volkswagen Golf") + podtitul ("GTI 2.0 TSI DSG") - v obou
+# variantach markupu dva <span title="...">...</span> uvnitr <h2>...</h2>.
+# Podtitul nese motorizaci → klicovy pro name_includes.
+_H2_RE = re.compile(r"<h2[^>]*>(.*?)</h2>", re.S)
+_TITLE_ATTR_RE = re.compile(r'title="([^"]*)"')
 _PRICE_RE = re.compile(r'data-testid="price-label"[^>]*>(.*?)</span>', re.S)
+# mobile.de vlastni hodnoceni ceny vuci trhu ("Fairer Preis"/"Hoher Preis" apod.).
+# Neni v HTML karte (tu delime na bloky pres _BLOCK_SPLIT), ale v JSON blobu
+# nekde jinde na strance (hydratacni data) - jeden objekt na inzerat, tvar:
+# ..."priceRating":{"rating":"VERY_GOOD_PRICE","ratingLabel":"Sehr guter Preis",...}
+# ...,"id":461773380,"kba":{...}... (id je nejblizsi NASLEDUJICI vyskyt "id"+"kba").
+# Parsuje se proto zvlast pres celou stranku, ne per-blok.
+_PRICE_RATING_JSON_RE = re.compile(r'"priceRating":\{"rating":"[A-Z_]+","ratingLabel":"([^"]*)"')
+_LISTING_ID_JSON_RE = re.compile(r'"id":(\d+),"kba":')
+
+
+def _extract_price_ratings(page_html: str) -> dict[str, str]:
+    """{source_id: ratingLabel} pro celou stranku - parovani podle pozice v JSON blobu."""
+    ratings = [(m.start(), m.group(1)) for m in _PRICE_RATING_JSON_RE.finditer(page_html)]
+    if not ratings:
+        return {}
+    ids = [(m.start(), m.group(1)) for m in _LISTING_ID_JSON_RE.finditer(page_html)]
+    out: dict[str, str] = {}
+    for pos, label in ratings:
+        # nejblizsi nasledujici id+kba po pozici priceRating patri ke stejnemu objektu
+        for id_pos, source_id in ids:
+            if id_pos > pos:
+                out[source_id] = label
+                break
+    return out
+
+
 _ATTR_RE = re.compile(
     r'data-testid="listing-details-attributes"[^>]*>(.*?)'
     r'(?=data-testid="seller-info"|data-testid="listing-action)',
@@ -55,9 +124,60 @@ _ID_RE = re.compile(r"[?&]id=(\d+)")
 _EZ_RE = re.compile(r"EZ\s*(?:\d{2}/)?((?:19|20)\d{2})")
 _KM_RE = re.compile(r"([\d.]{2,})\s*km", re.IGNORECASE)
 
+# Interni numericka ID mobile.de (z <select name="mk"/"md"> na search formu -
+# viz scripts/mobilede_probe.py). Bez nich fulltext hledani mobile.de tise
+# zahodi (viz docstring vyse) a vrati nefiltrovanou "nejnovejsi auta" stranku.
+# Klice jsou VZDY bez diakritiky (_ascii_upper nize) - "Škoda"/"ŠKODA" i
+# "Skoda" tak mapuji na stejny "SKODA" klic.
+_MAKE_IDS = {
+    "VW": 25200,
+    "VOLKSWAGEN": 25200,
+    "BMW": 3500,
+    "AUDI": 1900,
+    "SKODA": 22900,
+}
+_MODEL_IDS: dict[tuple[str, str], int] = {
+    ("VW", "GOLF"): 14,
+    ("BMW", "130"): 5,
+    ("BMW", "320"): 10,
+    ("AUDI", "S3"): 19,
+    ("SKODA", "OCTAVIA"): 10,
+}
+
+
+def _ascii_upper(text: str) -> str:
+    """'Škoda' -> 'SKODA' (odstrani diakritiku, at se da porovnavat s _MAKE_IDS/_MODEL_IDS)."""
+    norm = unicodedata.normalize("NFKD", text)
+    return "".join(c for c in norm if not unicodedata.combining(c)).upper()
+
+
+def _resolve_ids(make: str | None, model: str | None) -> tuple[int, int] | None:
+    """Prelozi lidske make/model na mobile.de makeId/modelId, pokud ho zname.
+
+    BMW ma modely bez pripony motorizace ("320", ne "320i"/"320d") - orizne
+    pripadna pismena na konci.
+    """
+    if not make or not model:
+        return None
+    make_key = _ascii_upper(make.strip())
+    if make_key == "VOLKSWAGEN":
+        make_key = "VW"
+    make_id = _MAKE_IDS.get(make_key)
+    if make_id is None:
+        return None
+    model_key = re.sub(r"[^A-Z0-9]", "", _ascii_upper(model.strip()))
+    if make_key == "BMW":
+        model_key = re.sub(r"[A-Z]+$", "", model_key)  # "320I"/"320D" -> "320"
+    model_id = _MODEL_IDS.get((make_key, model_key))
+    return (make_id, model_id) if model_id is not None else None
+
+
+MAX_PAGES = 10  # ~24 inzeratu/stranka -> az ~240; dalsi stranky jsou jen navigace
+# uvnitr uz projite Akamai vyzvy (levne, viz _paginate - pageNumber= primo v URL)
+
 
 class MobileDeLocalScraper(Scraper):
-    """Playwright Firefox; jeden pokus na watch, měkké selhání při challenge."""
+    """Scrapling StealthyFetcher (Camoufox); jeden pokus na watch, měkké selhání při challenge."""
 
     name = "mobilede"
 
@@ -69,46 +189,106 @@ class MobileDeLocalScraper(Scraper):
             logger.info("mobilede[%s]: preskakuji (IP challenge v tomto behu)", query.model)
             return []
         try:
-            from playwright.sync_api import sync_playwright
+            from scrapling.fetchers import StealthyFetcher
         except ImportError:
-            logger.warning("mobilede: Playwright neni nainstalovany, preskakuji")
+            logger.warning("mobilede: Scrapling neni nainstalovany, preskakuji")
             return []
 
         url = _build_url(query)
-        page_html: str | None = None
-        with sync_playwright() as pw:
-            # Cerstvy Firefox + novy kontext (presne jako funkcni probe). JEDEN pokus.
-            browser = pw.firefox.launch(headless=True)
-            try:
-                ctx = browser.new_context(locale="de-DE", viewport={"width": 1440, "height": 900})
-                page = ctx.new_page()
-                page.goto(url, wait_until="domcontentloaded", timeout=45000)
-                page.wait_for_timeout(8000)  # nech Akamai JS dobehnout
-                title = page.title()
-                if title and "verweigert" not in title.lower() and "denied" not in title.lower():
-                    page_html = page.content()
-            finally:
-                browser.close()
+        pages: list[str] = []
 
-        if page_html is None:
-            logger.warning("mobilede[%s]: Akamai challenge, preskakuji (IP potrebuje klid)", query.model)
+        def _paginate(page):
+            # Consent modal blokuje kliky na "Weiter" - odklikni, pokud se objevi.
+            try:
+                page.click(".mde-consent-accept-btn", timeout=4000)
+            except Exception:  # noqa: BLE001 — modal se nemusi objevit vubec
+                pass
+            pages.append(page.content())
+            # Klikani na "Weiter" bylo nespolehlive (prekryvajici prvky, timeouty
+            # i s force=True). mobile.de sam po kliku kanonizuje URL na
+            # "...&pageNumber=N" - primo tam navigovat je stabilnejsi a rychlejsi.
+            base_url = page.url
+            for page_num in range(2, MAX_PAGES + 1):
+                try:
+                    page.goto(
+                        f"{base_url}&pageNumber={page_num}",
+                        wait_until="domcontentloaded",
+                        timeout=15000,
+                    )
+                    page.wait_for_timeout(2000)
+                except Exception as exc:  # noqa: BLE001
+                    logger.info(
+                        "mobilede: navigace na stranku %d selhala: %s", page_num, str(exc)[:150]
+                    )
+                    break
+                html = page.content()
+                if "details.html?id=" not in html:
+                    break  # posledni stranka
+                pages.append(html)
+            return page
+
+        # JEDEN pokus (viz DELAY_RANGE komentar) - zadny retry pri chybe/challenge.
+        # Strankovani (page_action) bezi uvnitr TOHOTO jednoho projeti Akamai
+        # vyzvy - dalsi stranky uz nejsou nove pozadavky/dalsi flag riziko.
+        response = StealthyFetcher.fetch(
+            url,
+            headless=True,
+            humanize=True,
+            os_randomize=True,
+            block_webrtc=True,
+            google_search=False,
+            network_idle=True,
+            wait=8000,
+            timeout=45000,
+            page_action=_paginate,
+        )
+        title = (response.css("title::text").get() or "") if pages else ""
+        blocked = not pages or "verweigert" in title.lower() or "denied" in title.lower()
+
+        if blocked:
+            logger.warning(
+                "mobilede[%s]: Akamai challenge, preskakuji (IP potrebuje klid)", query.model
+            )
             self._challenged = True
             return []
 
-        raws = parse_listings(page_html, query)
-        logger.info("mobilede[%s]: %d inzeratu", query.model, len(raws))
+        raws: list[RawListing] = []
+        seen_ids: set[str] = set()
+        for page_html in pages:
+            for raw in parse_listings(page_html, query):
+                if raw.source_id in seen_ids:
+                    continue
+                seen_ids.add(raw.source_id)
+                raws.append(raw)
+
+        logger.info("mobilede[%s]: %d inzeratu (%d stranek)", query.model, len(raws), len(pages))
         time.sleep(random.uniform(*DELAY_RANGE))
         return raws
 
 
 def _build_url(query: SearchQuery) -> str:
     p = query.params
-    parts = [
-        f"{BASE}/fahrzeuge/search.html?isSearchRequest=true&scopeId=C&usage=USED&sortOption.sortBy=creationTime&sortOption.sortOrder=DESCENDING"
-    ]
-    text = p.get("text")
-    if text:
-        parts.append("modelDescription.modelDescription=" + text.replace(" ", "+"))
+    # Kdyz filtrujeme na vyssi motorizaci (power_from_kw) nebo prevodovku, radeji
+    # radit podle ceny sestupne (v ramci price_to stropu) nez podle novosti:
+    # hledany trim (GTI apod.) je typicky drazsi nez zakladni verze stejneho
+    # modelu, takze se v ramci nasi strankove kapacity nakupi driv - "nejnovejsi"
+    # razeni je z valne vetsiny obycejne Golfy/etc a hledany trim se v nem ztrati.
+    # Pozn.: "sortOption.sortBy=price" mobile.de tise ignoruje (jen creationTime
+    # umi tenhle dlouhy tvar) - funkcni je zkraceny "sb=p&od=down" ze select
+    # menu na strance (zjisteno 8/2026).
+    if p.get("power_from_kw") or p.get("transmission") or p.get("fuel") or p.get("name_includes"):
+        sort = "sb=p&od=down"
+    else:
+        sort = "sb=doc&od=down"
+    parts = [f"{BASE}/fahrzeuge/search.html?isSearchRequest=true&scopeId=C&usage=USED&{sort}"]
+    ids = _resolve_ids(p.get("make"), p.get("model"))
+    if ids:
+        make_id, model_id = ids
+        parts.append(f"makeModelVariant1.makeId={make_id}&makeModelVariant1.modelId={model_id}")
+    else:
+        text = p.get("text")
+        if text:
+            parts.append("modelDescription.modelDescription=" + text.replace(" ", "+"))
     if p.get("year_from"):
         parts.append(f"minFirstRegistrationDate={p['year_from']}-01-01")
     if p.get("year_to"):
@@ -116,6 +296,20 @@ def _build_url(query: SearchQuery) -> str:
     if p.get("price_to"):
         parts.append(f"maxPrice={p['price_to']}")
     return "&".join(parts)
+
+
+def _extract_title(blk: str) -> str | None:
+    """Hlavni nazev + podtitul (motorizace) z prvniho <h2>...</h2> v bloku.
+
+    Obe pozorovane varianty markupu maji title+subtitul jako dva
+    <span title="...">...</span> uvnitr <h2>, jen s jinymi (obfuskovanymi)
+    class jmeny - proto se necilime na tridu, jen na title atribut.
+    """
+    h2 = _H2_RE.search(blk)
+    if not h2:
+        return None
+    titles = [html_mod.unescape(t) for t in _TITLE_ATTR_RE.findall(h2.group(1)) if t]
+    return _clean(" ".join(titles)) if titles else None
 
 
 def _clean(fragment: str) -> str:
@@ -128,16 +322,17 @@ def _clean(fragment: str) -> str:
 def parse_listings(page_html: str, query: SearchQuery) -> list[RawListing]:
     """Rozparsuje HTML výsledovky mobile.de na RawListing. Testovatelné bez sítě."""
     blocks = _BLOCK_SPLIT.split(page_html)
+    price_ratings = _extract_price_ratings(page_html)
     params = query.params
     name_includes = [s.lower() for s in params.get("name_includes", [])]
     out: list[RawListing] = []
     seen: set[str] = set()
 
     for blk in blocks:
-        title_m = _TITLE_RE.search(blk)
+        title = _extract_title(blk)
         price_m = _PRICE_RE.search(blk)
         href_m = _HREF_RE.search(blk)
-        if not (title_m and price_m and href_m):
+        if not (title and price_m and href_m):
             continue
 
         href = html_mod.unescape(href_m.group(1))
@@ -146,10 +341,6 @@ def parse_listings(page_html: str, query: SearchQuery) -> list[RawListing]:
             continue
         source_id = id_m.group(1)
 
-        title = _clean(title_m.group(1))
-        sub_m = _SUBTITLE_RE.search(blk)
-        if sub_m:
-            title = f"{title} {html_mod.unescape(sub_m.group(1))}".strip()
         low = title.lower()
         if name_includes and not all(n in low for n in name_includes):
             continue
@@ -160,6 +351,30 @@ def parse_listings(page_html: str, query: SearchQuery) -> list[RawListing]:
 
         attrs_m = _ATTR_RE.search(blk)
         attrs = _clean(attrs_m.group(1)) if attrs_m else ""
+
+        # Prevodovka (DSG/Automatik apod.) byva jen v titulku, ne v atributech
+        # ("EZ .. • km • kW • palivo") - kombinuj oboje pro spolehlivou klasifikaci.
+        if params.get("transmission") == "manual":
+            if parse_transmission(f"{attrs} {title}") == "auto":
+                continue
+
+        # Vykon je spolehlivejsi diskriminator vyssich motorizaci (GTI/M/S apod.)
+        # nez text v titulku - ten se pise ruzne ("GTI", "2.0 TSI", zdvojene atd.)
+        # a filtr vykonu v UI mobile.de je jen v modalu bez stabilniho URL parametru.
+        if params.get("power_from_kw"):
+            power_kw = parse_power_kw(attrs)
+            # Na rozdil od transmission tu neznamy vykon NEPROPOUSTIME - u vsech
+            # overenych GTI se vykon parsuje spolehlive, takze "neznamo" tady
+            # skoro vzdy znamena low-trim Golf, kde v atributech kW jednoduse neni.
+            if power_kw is None or power_kw < params["power_from_kw"]:
+                continue
+
+        # Palivo (Benzin/Diesel) je posledni polozka v atributech skoro vzdy
+        # pritomna - pouzij se tam, kde jeden mobile.de "model" bucket mixuje
+        # vice motorizaci se stejnym cislem (napr. BMW "320" = 320i i 320d).
+        if params.get("fuel"):
+            if parse_fuel(attrs) != params["fuel"]:
+                continue
 
         year = None
         ez = _EZ_RE.search(attrs)
@@ -192,11 +407,12 @@ def parse_listings(page_html: str, query: SearchQuery) -> list[RawListing]:
                 currency="EUR",
                 year=year,
                 mileage_km=km,
-                transmission_text=attrs,  # normalize vytáhne manual/automat
+                transmission_text=f"{attrs} {title}",  # normalize vytáhne manual/automat
                 drivetrain_text=title,
                 fuel_text=attrs,  # Benzin/Diesel je v atributech
                 power_text=attrs,  # "92 kW (125 PS)" je v atributech
                 body_text=title,
+                price_rating_text=price_ratings.get(source_id),
                 image_url=img_m.group(1) if img_m else None,
                 raw={"attrs": attrs},
             )

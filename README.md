@@ -21,9 +21,10 @@ watch (config + web garáž) → scrapery → normalize → DB (Listing + PriceH
 ```
 
 - **Scrapery** jsou pluginy (`app/scrapers/*.py`), každý portál = jeden modul.
-  Funkční: **Sauto**, **Sbazar** (JSON API), **AutoScout24.de** (`__NEXT_DATA__`).
-  **Mobile.de** je blokovaný Akamaiem i lokálně — vyžadoval by residential proxy;
-  německý trh pokrývá AutoScout24. Facebook Marketplace zatím není (login + ban riziko).
+  Funkční: **Sauto**, **Sbazar** (JSON API), **AutoScout24.de** (`__NEXT_DATA__`),
+  **Kleinanzeigen**. **Mobile.de** je za Akamaiem blokovaný z cloudu, ale lokálně
+  (z domácí IP, přes Scrapling/Camoufox — viz níže) projde; běží 1× denně přes
+  launchd, ne v hodinovém cronu. Facebook Marketplace zatím není (login + ban riziko).
 - **Scoring** (`app/scoring/engine.py`): lineární regrese `cena ~ rok + km` (numpy),
   bonusy za manuál / nízký nájezd / RWD-AWD. Při < 8 vzorcích fallback na medián.
 - **Dashboard** (`web/`): React + TS + Vite — fulltext („golf gti 2013 manual"),
@@ -69,28 +70,39 @@ python -m scripts.telegram_chatid          # token z .env, nebo předej argument
 > Za firemní TLS proxy, která láme SSL, nastav v `.env` `SSL_VERIFY=false`
 > (v produkci nech `true`).
 
-### Mobile.de — denní lokální běh (zdarma, z domácí IP)
+### Denní lokální běh — všechny portály na jednom místě (bez Telegramu)
 
-Mobile.de chrání Akamai: z cloudu neprůchodné, z domácí (rezidenční) IP přes
-Firefox to projde. Proto běží 1× denně **lokálně na tvém Macu** a zapisuje do
-stejné DB jako cron:
+Nejjednodušší provoz: žádný cloud, žádný Neon, žádný Telegram — jednou denně se
+lokálně obejdou **všechny portály včetně mobile.de** a zapíšou do `local.db`,
+který čte dashboard (`uvicorn app.main:app` na http://localhost:8000 +
+`npm run dev` na http://localhost:5173). Stačí pak jednou za den otevřít
+localhost a mít aktuální stav.
+
+Mobile.de chrání Akamai: z cloudu neprůchodné (Chromium blokne i lokálně už na
+TLS vrstvě), zpevněný Firefox (Camoufox, přes [Scrapling](https://github.com/D4Vinci/Scrapling))
+z domácí (rezidenční) IP projde:
 
 ```bash
-pip install -e ".[playwright]"
-python -m playwright install firefox
+pip install -e ".[scrapling]"
+scrapling install   # stáhne Camoufox (Firefox) + GeoLite2 databázi
 
-# rucni test (pri Akamai challenge mekce skonci, zkus jindy):
-python -m scripts.run_mobilede_local
+# rucni test vseho (Sauto/Sbazar/AutoScout24/Kleinanzeigen + mobile.de):
+python -m scripts.run_daily_local
 
 # automaticky kazdy den v 8:15 (jednorazova instalace):
-cp deploy/com.carscout.mobilede.plist ~/Library/LaunchAgents/
-launchctl load ~/Library/LaunchAgents/com.carscout.mobilede.plist
-# log: /tmp/carscout-mobilede.log
+cp deploy/com.carscout.dailylocal.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.carscout.dailylocal.plist
+# log: /tmp/carscout-dailylocal.log
 ```
 
-Parametry si odvodí z watchů automaticky. Diagnostika: `python -m scripts.mobilede_probe`
-(jediný opatrný pokus; při úspěchu uloží snapshot stránky). Pozor: opakované
-pokusy Akamai flag prodlužují — max pár za den.
+Parametry pro mobile.de si watche odvodí automaticky. Diagnostika samotného
+mobile.de: `python -m scripts.mobilede_probe` (jediný opatrný pokus; při úspěchu
+uloží snapshot stránky) nebo izolovaně `python -m scripts.run_mobilede_local`.
+Pozor: opakované pokusy Akamai flag prodlužují — max pár za den.
+
+> Cloudová varianta (GitHub Actions + Neon + Vercel, `.github/workflows/hunt.yml`)
+> pořád existuje a jede vedle nezávisle, pokud bys chtěl i vzdálený přístup —
+> pro čistě lokální provoz ji ale nepotřebuješ.
 
 ---
 

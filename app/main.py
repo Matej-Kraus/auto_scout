@@ -86,6 +86,10 @@ def _to_out(lst: Listing, score) -> ListingOut:
         expected_price=score.expected_price if score else None,
         pct_below=score.pct_below if score else None,
         score_method=score.method if score else None,
+        deal_tier=score.tier if score else "none",
+        confidence=score.confidence if score else 0.0,
+        portal_agreement=score.portal_agreement if score else None,
+        implausible=score.implausible if score else None,
     )
 
 
@@ -154,7 +158,7 @@ def status() -> StatusOut:
         for lst in active:
             by_model[lst.model] += 1
             sc = scores.get(lst.id)
-            if sc and sc.is_alertable and sc.value >= 0.18:
+            if sc and sc.tier == "hot":
                 hot += 1
 
         last_run = session.scalar(select(func.max(Listing.last_seen)))

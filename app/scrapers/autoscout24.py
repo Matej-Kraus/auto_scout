@@ -24,7 +24,7 @@ import time
 import httpx
 
 from app.config import settings
-from app.scrapers.base import RawListing, Scraper, SearchQuery
+from app.scrapers.base import RawListing, Scraper, SearchQuery, title_matches
 
 logger = logging.getLogger(__name__)
 
@@ -114,17 +114,14 @@ def parse_listings(page_props: dict, query: SearchQuery) -> list[RawListing]:
     """Z pageProps.listings vytvoří RawListing. Padne hlasitě při změně struktury."""
     listings = page_props.get("listings")
     if listings is None:
-        raise RuntimeError(
-            f"AutoScout24: chybi klic 'listings', dostal {list(page_props)[:8]}"
-        )
+        raise RuntimeError(f"AutoScout24: chybi klic 'listings', dostal {list(page_props)[:8]}")
 
-    name_includes = [s.lower() for s in query.params.get("name_includes", [])]
+    name_includes = query.params.get("name_includes", [])
     out: list[RawListing] = []
     for item in listings:
         vehicle = item.get("vehicle") or {}
         title = _title(vehicle, item)
-        low = title.lower()
-        if name_includes and not all(n in low for n in name_includes):
+        if not title_matches(title, name_includes):
             continue
 
         price = _int((item.get("price") or {}).get("priceRaw"))
@@ -152,6 +149,7 @@ def parse_listings(page_props: dict, query: SearchQuery) -> list[RawListing]:
                 fuel_text=_detail_from_icons(item, "gas_pump"),
                 power_text=_detail_from_icons(item, "speedometer"),
                 body_text=title,
+                price_rating_text=_price_evaluation(item),
                 image_url=_first_image(item),
                 raw=item,
             )
@@ -192,6 +190,19 @@ def _year(item: dict, vehicle: dict) -> int | None:
         if 1980 <= int(cand) <= 2100:
             return int(cand)
     return None
+
+
+def _price_evaluation(item: dict) -> int | None:
+    """AS24 vlastni hodnoceni ceny: 1 (Sehr guter Preis) .. 5 (Hoher Preis).
+
+    Overeno 8/2026 primo z definice filtru na strance. Posila se dal jako cislo,
+    normalize.parse_price_rating ho prelozi na spolecnou skalu s mobile.de.
+    """
+    price = item.get("price") or {}
+    if not price.get("isPriceEvaluationEnabled"):
+        return None
+    val = price.get("priceEvaluation")
+    return val if isinstance(val, int) and 1 <= val <= 5 else None
 
 
 def _first_image(item: dict) -> str | None:

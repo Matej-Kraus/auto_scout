@@ -284,6 +284,30 @@ BUDGET_MAX_CZK = 300_000
 # Min. pocet vzorku pro regresni scoring; pod tim fallback na median.
 MIN_SAMPLES_FOR_REGRESSION = 8
 
+# --- ladeni scoringu (viz app/scoring/engine.py) ---
+# Vaha hodnoceni burzy (mobile.de/AS24) proti nasemu vlastnimu modelu pri fuzi.
+# 0 = ignorovat burzu, 1 = brat ji stejne vazne jako vlastni regresi. Burza vidi
+# vic (vybava, VIN, realne prodeje), ale jen v 5 hrubych stupnich → nize nez 1.
+PORTAL_RATING_WEIGHT = 0.6
+
+# Kolik vzorku je "dost" pro plnou duveru: conf = n/(n+K).
+# K=25 → 8 vzorku ~0.24, 50 ~0.67, 200 ~0.89. Malo dat tak samo o sobe nestaci
+# na "hot deal", i kdyby cena vypadala skvele.
+SCORE_CONFIDENCE_K = 25
+
+# Kalibrace tieru: (nazev, (min z-skore, min uspora v %)). Musi platit OBOJI.
+# Poradi od nejlepsiho — bere se prvni, na ktery inzerat dosahne.
+# Prahy jsou nastavene tak, aby "hot" bylo vzacne (jednotky % nabidky), jinak
+# barva ztraci smysl — driv byl prah natvrdo a oznacoval 20 % vsech aut.
+# Zmereno na realnych datech (1488 aktivnich inzeratu, 8/2026): hot ~5 %,
+# good ~8 %, fair ~11 %. Cil u "hot" je "jedno auto z dvaceti" — dost vzacne,
+# aby se na nej vyplatilo kouknout hned, dost caste, aby jich par bylo vzdy.
+TIER_THRESHOLDS: tuple[tuple[str, tuple[float, float]], ...] = (
+    ("hot", (1.80, 0.15)),
+    ("good", (1.00, 0.08)),
+    ("fair", (0.40, 0.03)),
+)
+
 # Po kolika hodinach bez videni se inzerat povazuje za zmizely (is_active=False).
 # Vychazi z toho, ze cron bezi casto; staleness je robustnejsi nez per-run diff
 # (snese vypadek scraperu i castecne prohledani).

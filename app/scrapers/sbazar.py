@@ -22,7 +22,7 @@ import time
 import httpx
 
 from app.config import settings
-from app.scrapers.base import RawListing, Scraper, SearchQuery
+from app.scrapers.base import RawListing, Scraper, SearchQuery, title_matches
 
 logger = logging.getLogger(__name__)
 
@@ -124,10 +124,8 @@ class SbazarScraper(Scraper):
         if not _is_whole_car(item, params.get("make")):
             return None  # nahradni dil / prislusenstvi, ne cele auto
         name = item.get("name") or ""
-        low = name.lower()
-        for needle in params.get("name_includes", []):
-            if needle.lower() not in low:
-                return None
+        if not title_matches(name, params.get("name_includes", [])):
+            return None
 
         price = item.get("price")
         if not price or item.get("price_by_agreement"):

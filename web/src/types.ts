@@ -10,7 +10,8 @@ export interface Listing {
   fuel_type: string | null;
   power_kw: number | null;
   body_type: string | null;
-  price_rating: string | null; // "great" | "good" | "fair" | "high" — jen kde to portal nabizi
+  // hodnoceni ceny od bazaru: great | good | fair | elevated | high (kde ho nabizi)
+  price_rating: string | null;
   price_czk: number;
   currency: string;
   url: string;
@@ -23,6 +24,11 @@ export interface Listing {
   expected_price: number | null;
   pct_below: number | null;
   score_method: string | null;
+  // Tier pocita backend (vidi cele rozdeleni skupiny → da se kalibrovat).
+  deal_tier: "hot" | "good" | "fair" | "none";
+  confidence: number; // 0-1, jak silna data za skore stoji
+  portal_agreement: string | null; // "agree" | "conflict" vuci hodnoceni bazaru
+  implausible: string | null; // "damage" | "mileage" | "price" — nedůvěryhodný inzerát
 }
 
 export interface PricePoint {

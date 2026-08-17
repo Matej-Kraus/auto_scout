@@ -618,9 +618,23 @@ body::after {
   color: var(--fair);
   border-color: rgba(255, 210, 63, 0.4);
 }
+.price-rating-elevated,
 .price-rating-high {
   color: var(--hot);
   border-color: rgba(255, 59, 48, 0.4);
+}
+/* nedůvěryhodný inzerát (bouračka / nesmyslný nájezd / cena mimo realitu) */
+.price-warn {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 59, 48, 0.45);
+  background: rgba(255, 59, 48, 0.1);
+  color: var(--hot);
+  white-space: nowrap;
 }
 .card-foot {
   display: flex;

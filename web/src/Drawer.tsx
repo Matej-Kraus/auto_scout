@@ -11,7 +11,6 @@ import {
 import { fetchListing } from "./api";
 import {
   czk,
-  dealTier,
   drivetrainLabel,
   km,
   pct,
@@ -158,7 +157,7 @@ export function Drawer({ id, onClose }: { id: number; onClose: () => void }) {
                 marginTop: 14,
               }}
             >
-              tier: {dealTier(data.deal_score).toUpperCase()} · metoda:{" "}
+              tier: {data.deal_tier.toUpperCase()} · metoda:{" "}
               {data.score_method ?? "—"}
             </p>
           </>

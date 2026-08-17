@@ -1,6 +1,6 @@
 """Entrypoint pro jeden beh pipeline. Tohle spousti cron (GitHub Actions).
 
-    python -m app.run_once
+python -m app.run_once
 """
 
 from __future__ import annotations

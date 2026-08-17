@@ -56,7 +56,9 @@ def _fmt_price(czk: int) -> str:
     return f"{czk:,}".replace(",", " ") + " Kč"
 
 
-def format_alert(listing: Listing, score: DealScore, kind: str, old_price: int | None = None) -> str:
+def format_alert(
+    listing: Listing, score: DealScore, kind: str, old_price: int | None = None
+) -> str:
     """Hezka Markdown zprava o dealu / zlevneni."""
     head = "🔥" if kind == "new" else "📉"
     title = listing.title or f"{listing.model} {listing.generation}"

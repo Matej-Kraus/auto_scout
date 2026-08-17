@@ -26,7 +26,7 @@ import time
 import httpx
 
 from app.config import settings
-from app.scrapers.base import RawListing, Scraper, SearchQuery
+from app.scrapers.base import RawListing, Scraper, SearchQuery, title_matches
 
 logger = logging.getLogger(__name__)
 
@@ -122,11 +122,11 @@ def parse_listings(html: str, query: SearchQuery) -> list[RawListing]:
         if _NO_RESULTS in html:
             return []  # legitimne prazdny vysledek
         raise RuntimeError(
-            "Kleinanzeigen: zadny <article class=\"aditem\"> — zmena struktury/blokace?"
+            'Kleinanzeigen: zadny <article class="aditem"> — zmena struktury/blokace?'
         )
 
     params = query.params
-    name_includes = [s.lower() for s in params.get("name_includes", [])]
+    name_includes = params.get("name_includes", [])
     out: list[RawListing] = []
 
     for art in articles:
@@ -137,8 +137,7 @@ def parse_listings(html: str, query: SearchQuery) -> list[RawListing]:
             continue  # VB (cena dohodou) / promo bloky
 
         title = html_mod.unescape(title_m.group(1).strip())
-        low = title.lower()
-        if name_includes and not all(n in low for n in name_includes):
+        if not title_matches(title, name_includes):
             continue
         if _JUNK_TITLE_RE.search(title):
             continue  # vykup/poptavka/vrak

@@ -16,15 +16,36 @@ _AWD_HINTS = ("quattro", "4motion", "4x4", "awd", "allrad", "xdrive", "4wd", "4m
 _RWD_HINTS = ("rwd", "zadni", "zadní", "hinterrad", "heckantrieb")
 _FWD_HINTS = ("fwd", "predni", "přední", "frontantrieb", "vorderrad")
 
-# --- portalovo vlastni hodnoceni ceny vuci trhu (napr. mobile.de badge "Fairer
-# Preis"/"Hoher Preis") - normalizuje se na jazykove nezavislou skalu. Poradi
-# zaleze (nejdriv "sehr" varianty, jinak by je chytilo obecne "gut"/"hoch").
+# --- portalovo vlastni hodnoceni ceny vuci trhu ---
+# mobile.de i AutoScout24 pouzivaji STEJNOU 5stupnovou skalu (overeno 8/2026 z
+# definice filtru na AS24: priceEvaluation 1=Sehr guter Preis .. 5=Hoher Preis).
+# Normalizujeme na jazykove nezavisle nazvy, at je scoring nezavisly na portalu.
+#
+# Hodnota je cenna, protoze burzy ji pocitaji z dat, ktera NEMAME (vybava, VIN
+# historie, realne prodejni ceny) — je to nezavisly druhy nazor k nasemu modelu.
+PRICE_RATING_SCALE = ("great", "good", "fair", "elevated", "high")
+
+# AS24: ciselna hodnota 1-5 primo v JSON (props.pageProps.listings[].price.priceEvaluation)
+_AS24_PRICE_EVAL = {1: "great", 2: "good", 3: "fair", 4: "elevated", 5: "high"}
+
+# mobile.de: enum v JSON blobu ("rating":"VERY_GOOD_PRICE") — jazykove nezavisly,
+# proto ma prednost pred textovym labelem.
+_MOBILEDE_PRICE_ENUM = {
+    "VERY_GOOD_PRICE": "great",
+    "GOOD_PRICE": "good",
+    "REASONABLE_PRICE": "fair",
+    "INCREASED_PRICE": "elevated",
+    "HIGH_PRICE": "high",
+}
+
+# Fallback z textoveho labelu (kdyby portal enum nedodal). Poradi zalezi:
+# nejdriv "sehr" varianty, jinak by je chytilo obecne "gut"/"hoch".
 _PRICE_RATING_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("great", ("sehr guter preis", "top preis", "great price", "top-preis")),
     ("good", ("guter preis", "good price")),
     ("fair", ("fairer preis", "fair price", "reasonable price")),
-    ("high", ("sehr hoher preis", "very high price")),
-    ("high", ("hoher preis", "high price")),
+    ("elevated", ("erhöhter preis", "erhoehter preis", "increased price")),
+    ("high", ("sehr hoher preis", "very high price", "hoher preis", "high price")),
 )
 
 # --- mapovani paliva (poradi = priorita; hybrid/elektro pred benzinem) ---
@@ -81,10 +102,26 @@ def parse_fuel(text: str | None) -> str | None:
     return None
 
 
-def parse_price_rating(text: str | None) -> str | None:
-    """ "Fairer Preis"/"Hoher Preis" apod. -> "great"|"good"|"fair"|"high" (jazykove nezavisle)."""
-    if not text:
+def parse_price_rating(value: str | int | None) -> str | None:
+    """Portalove hodnoceni ceny -> spolecna skala PRICE_RATING_SCALE.
+
+    Prijima (v poradi spolehlivosti):
+      - int 1-5            = AS24 priceEvaluation
+      - enum "GOOD_PRICE"  = mobile.de rating
+      - text "Guter Preis" = citelny label (fallback, jazykove zavisly)
+    """
+    if value is None or value == "":
         return None
+
+    if isinstance(value, int):
+        return _AS24_PRICE_EVAL.get(value)
+
+    text = str(value).strip()
+    if text.isdigit():
+        return _AS24_PRICE_EVAL.get(int(text))
+    if text.upper() in _MOBILEDE_PRICE_ENUM:
+        return _MOBILEDE_PRICE_ENUM[text.upper()]
+
     low = text.lower()
     for rating, hints in _PRICE_RATING_HINTS:
         if any(h in low for h in hints):

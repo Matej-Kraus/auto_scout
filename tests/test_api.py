@@ -94,4 +94,7 @@ def test_status_endpoint(client):
     assert st["active_listings"] == 10
     assert st["by_model"] == {"audi_s3": 10}
     assert st["last_run"] is not None
-    assert st["hot_deals"] >= 1  # nejlevnejsi je vyrazne pod trhem
+    # 10 skoro identickych aut je zamerne PRILIS MALO dat na "hot deal" — scoring
+    # pri nizke duvere skore stahuje (viz SCORE_CONFIDENCE_K). Kalibraci tieru
+    # testuje tests/test_scoring.py na realistickem vzorku.
+    assert st["hot_deals"] == 0

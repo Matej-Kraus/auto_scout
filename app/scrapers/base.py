@@ -2,10 +2,33 @@
 
 from __future__ import annotations
 
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from functools import lru_cache
 
 from app.config import Watch
+
+
+@lru_cache(maxsize=256)
+def _needle_re(needle: str) -> re.Pattern[str]:
+    """Vzor pro jeden token z name_includes.
+
+    Hranice slov (\\b), aby "s3" nechytlo "xs3000". Navic zakazany nasledujici
+    ".<cislo>", protoze u aut to skoro vzdy znamena objem motoru, ne oznaceni
+    modelu: bez toho "s3" matchovalo "Audi a6 s3.0" a pletlo A6 mezi S3
+    (overeno na realnych datech 8/2026 - kazilo to i trzni model skupiny).
+    """
+    return re.compile(rf"\b{re.escape(needle)}\b(?![.,]\d)", re.IGNORECASE)
+
+
+def title_matches(title: str | None, name_includes: list[str] | tuple[str, ...]) -> bool:
+    """Obsahuje titulek VSECHNY pozadovane tokeny (na hranicich slov)?"""
+    if not name_includes:
+        return True
+    if not title:
+        return False
+    return all(_needle_re(n).search(title) for n in name_includes)
 
 
 @dataclass
@@ -42,7 +65,10 @@ class RawListing:
     fuel_text: str | None = None  # syrovy text paliva (napr. "Benzín" / "Diesel")
     power_text: str | None = None  # syrovy text s vykonem (napr. "180 kW")
     body_text: str | None = None  # syrovy text karoserie (napr. "Kombi")
-    price_rating_text: str | None = None  # portalovo vlastni hodnoceni ceny (napr. "Fairer Preis")
+    # Portalovo vlastni hodnoceni ceny vuci trhu. Ruzne portaly ruzny tvar:
+    # AS24 int 1-5, mobile.de enum "GOOD_PRICE", pripadne citelny label.
+    # normalize.parse_price_rating() to sjednoti na spolecnou skalu.
+    price_rating_text: str | int | None = None
     image_url: str | None = None  # nahledovy obrazek (prvni foto)
     raw: dict = field(default_factory=dict)  # cela odpoved pro pripadny dalsi parsing
 

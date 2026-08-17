@@ -100,7 +100,9 @@ def format_alert_email(
     if score.pct_below is not None and score.pct_below > 0:
         basis = "mediánu" if score.method == "median" else "predikce"
         deal_line_txt = f"📊 {round(score.pct_below * 100)} % pod {basis}"
-        deal_line_html = f'<div style="color:#0a7d2c">📊 {round(score.pct_below * 100)} % pod {basis}</div>'
+        deal_line_html = (
+            f'<div style="color:#0a7d2c">📊 {round(score.pct_below * 100)} % pod {basis}</div>'
+        )
 
     bonuses = [_BONUS_CZ[k] for k in score.bonuses if k in _BONUS_CZ]
     bonus_txt = ("➕ " + ", ".join(bonuses)) if bonuses else ""
@@ -127,7 +129,16 @@ def format_alert_email(
 </div>"""
 
     text = "\n".join(
-        x for x in [f"{head} {title}", _specs(listing), price_txt, deal_line_txt, bonus_txt, listing.url] if x
+        x
+        for x in [
+            f"{head} {title}",
+            _specs(listing),
+            price_txt,
+            deal_line_txt,
+            bonus_txt,
+            listing.url,
+        ]
+        if x
     )
     return subject, html, text
 

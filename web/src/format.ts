@@ -63,14 +63,18 @@ export const sourceLabel = (s: string) =>
     kleinanzeigen: "KLEINANZ.",
   })[s] ?? s.toUpperCase();
 
-// Barva podle kvality dealu (deal_score)
-export function dealTier(score: number | null): "hot" | "good" | "fair" | "none" {
-  if (score == null) return "none";
-  if (score >= 0.18) return "hot";
-  if (score >= 0.1) return "good";
-  if (score >= 0.03) return "fair";
-  return "none";
-}
+// Tier uz pocita backend (app/scoring/engine.py) — vidi cele rozdeleni skupiny,
+// takze ho umi kalibrovat; frontend ho jen zobrazuje.
+export type DealTier = "hot" | "good" | "fair" | "none";
+
+// Proc inzeratu neverime — vysvetlivka k odznaku na karte.
+const IMPLAUSIBLE_LABELS: Record<string, string> = {
+  damage: "poškozené / na díly",
+  mileage: "nájezd nesedí na rok",
+  price: "cena mimo realitu",
+};
+export const implausibleLabel = (r: string | null) =>
+  r ? IMPLAUSIBLE_LABELS[r] ?? "podezřelý inzerát" : null;
 
 export const timeAgo = (iso: string) => {
   const diff = Date.now() - new Date(iso).getTime();

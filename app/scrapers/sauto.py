@@ -15,7 +15,7 @@ import time
 import httpx
 
 from app.config import settings
-from app.scrapers.base import RawListing, Scraper, SearchQuery
+from app.scrapers.base import RawListing, Scraper, SearchQuery, title_matches
 
 logger = logging.getLogger(__name__)
 
@@ -97,11 +97,9 @@ class SautoScraper(Scraper):
     def _match_and_build(self, item: dict, query: SearchQuery) -> RawListing | None:
         """Client-side filtr (nazev + rocnik) + prevod na RawListing."""
         params = query.params
-        name = (item.get("name") or "")
-        low = name.lower()
-        for needle in params.get("name_includes", []):
-            if needle.lower() not in low:
-                return None
+        name = item.get("name") or ""
+        if not title_matches(name, params.get("name_includes", [])):
+            return None
 
         year = _year_from_date(item.get("manufacturing_date"))
         if year is not None:

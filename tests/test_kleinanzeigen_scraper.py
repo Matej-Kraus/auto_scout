@@ -27,20 +27,24 @@ def _article(adid: str, title: str, price: str, tags: str, href: str | None = No
 </article>"""
 
 
-_HTML = "<html><body>" + "".join(
-    [
-        # sedi: Mk7 GTI s EZ i km
-        _article("111", "VW Golf VII GTI Performance", "13.900", "136.000 km;EZ 04/2014"),
-        # zahozen: vykupovy inzerat
-        _article("222", "Suche VW Golf GTI Motorschaden Ankauf", "3.500", "EZ 01/2015"),
-        # zahozen: rok mimo rozsah (2010 < 2012)
-        _article("333", "VW Golf VI GTI", "8.000", "180.000 km;EZ 06/2010"),
-        # zahozen: bez EZ pri rocnikovem filtru
-        _article("444", "VW Golf GTI Teileträger", "5.000", "150.000 km"),
-        # zahozen: name_includes (chybi gti)
-        _article("555", "VW Golf VII 1.6 TDI", "9.000", "120.000 km;EZ 03/2015"),
-    ]
-) + "</body></html>"
+_HTML = (
+    "<html><body>"
+    + "".join(
+        [
+            # sedi: Mk7 GTI s EZ i km
+            _article("111", "VW Golf VII GTI Performance", "13.900", "136.000 km;EZ 04/2014"),
+            # zahozen: vykupovy inzerat
+            _article("222", "Suche VW Golf GTI Motorschaden Ankauf", "3.500", "EZ 01/2015"),
+            # zahozen: rok mimo rozsah (2010 < 2012)
+            _article("333", "VW Golf VI GTI", "8.000", "180.000 km;EZ 06/2010"),
+            # zahozen: bez EZ pri rocnikovem filtru
+            _article("444", "VW Golf GTI Teileträger", "5.000", "150.000 km"),
+            # zahozen: name_includes (chybi gti)
+            _article("555", "VW Golf VII 1.6 TDI", "9.000", "120.000 km;EZ 03/2015"),
+        ]
+    )
+    + "</body></html>"
+)
 
 
 def test_parses_and_filters():

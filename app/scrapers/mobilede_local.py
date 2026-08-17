@@ -67,7 +67,7 @@ import time
 import unicodedata
 
 from app.normalize import parse_fuel, parse_power_kw, parse_transmission
-from app.scrapers.base import RawListing, Scraper, SearchQuery
+from app.scrapers.base import RawListing, Scraper, SearchQuery, title_matches
 
 logger = logging.getLogger(__name__)
 
@@ -92,23 +92,24 @@ _PRICE_RE = re.compile(r'data-testid="price-label"[^>]*>(.*?)</span>', re.S)
 # nekde jinde na strance (hydratacni data) - jeden objekt na inzerat, tvar:
 # ..."priceRating":{"rating":"VERY_GOOD_PRICE","ratingLabel":"Sehr guter Preis",...}
 # ...,"id":461773380,"kba":{...}... (id je nejblizsi NASLEDUJICI vyskyt "id"+"kba").
-# Parsuje se proto zvlast pres celou stranku, ne per-blok.
-_PRICE_RATING_JSON_RE = re.compile(r'"priceRating":\{"rating":"[A-Z_]+","ratingLabel":"([^"]*)"')
+# Parsuje se proto zvlast pres celou stranku, ne per-blok. Bereme ENUM (ne label) —
+# je jazykove nezavisly, takze prezije i zmenu jazyka stranky.
+_PRICE_RATING_JSON_RE = re.compile(r'"priceRating":\{"rating":"([A-Z_]+)"')
 _LISTING_ID_JSON_RE = re.compile(r'"id":(\d+),"kba":')
 
 
 def _extract_price_ratings(page_html: str) -> dict[str, str]:
-    """{source_id: ratingLabel} pro celou stranku - parovani podle pozice v JSON blobu."""
+    """{source_id: rating_enum} pro celou stranku - parovani podle pozice v JSON blobu."""
     ratings = [(m.start(), m.group(1)) for m in _PRICE_RATING_JSON_RE.finditer(page_html)]
     if not ratings:
         return {}
     ids = [(m.start(), m.group(1)) for m in _LISTING_ID_JSON_RE.finditer(page_html)]
     out: dict[str, str] = {}
-    for pos, label in ratings:
+    for pos, rating in ratings:
         # nejblizsi nasledujici id+kba po pozici priceRating patri ke stejnemu objektu
         for id_pos, source_id in ids:
             if id_pos > pos:
-                out[source_id] = label
+                out[source_id] = rating
                 break
     return out
 
@@ -324,7 +325,7 @@ def parse_listings(page_html: str, query: SearchQuery) -> list[RawListing]:
     blocks = _BLOCK_SPLIT.split(page_html)
     price_ratings = _extract_price_ratings(page_html)
     params = query.params
-    name_includes = [s.lower() for s in params.get("name_includes", [])]
+    name_includes = params.get("name_includes", [])
     out: list[RawListing] = []
     seen: set[str] = set()
 
@@ -341,12 +342,16 @@ def parse_listings(page_html: str, query: SearchQuery) -> list[RawListing]:
             continue
         source_id = id_m.group(1)
 
-        low = title.lower()
-        if name_includes and not all(n in low for n in name_includes):
+        if not title_matches(title, name_includes):
             continue
 
         price = int(re.sub(r"[^\d]", "", _clean(price_m.group(1))) or 0)
         if price < 500:  # sponzorovaný blok / bez ceny
+            continue
+        # Cenovy strop posilame i v URL (maxPrice), ale kontrolujeme i tady:
+        # mobile.de uz jednou parametr tise zahodil (modelDescription), takze
+        # se na server-side filtr nespolehame.
+        if params.get("price_to") and price > params["price_to"]:
             continue
 
         attrs_m = _ATTR_RE.search(blk)

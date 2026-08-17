@@ -15,7 +15,7 @@ import { FilterPanel } from "./FilterPanel";
 import {
   bodyLabel,
   czk,
-  dealTier,
+  implausibleLabel,
   drivetrainLabel,
   fuelLabel,
   km,
@@ -150,7 +150,7 @@ export function App() {
   );
 
   const hotCount =
-    clusters?.filter((c) => dealTier(c.primary.deal_score) === "hot").length ?? 0;
+    clusters?.filter((c) => c.primary.deal_tier === "hot").length ?? 0;
   const searchActive = isSearchActive(search);
 
   const labelFor = useCallback(
@@ -721,7 +721,7 @@ function CarCard({
   onHide: () => void;
   onOpen: () => void;
 }) {
-  const tier = dealTier(listing.deal_score);
+  const tier = listing.deal_tier;
   const below = pct(listing.pct_below);
   return (
     <article
@@ -788,13 +788,30 @@ function CarCard({
               <span className="card-inprice">v ceně</span>
             )}
           </span>
-          {listing.price_rating && (
+          {listing.implausible ? (
             <span
-              className={`price-rating price-rating-${listing.price_rating}`}
-              title="Hodnocení ceny podle bazaru (doplňkový signál k našemu skóre)"
+              className="price-warn"
+              title="Podezřelý inzerát — nezapočítává se do skóre ani do odhadu trhu"
             >
-              {priceRatingLabel(listing.price_rating)}
+              ⚠ {implausibleLabel(listing.implausible)}
             </span>
+          ) : (
+            listing.price_rating && (
+              <span
+                className={`price-rating price-rating-${listing.price_rating}`}
+                title={
+                  listing.portal_agreement === "agree"
+                    ? "Bazar i náš model se shodují — silnější signál"
+                    : listing.portal_agreement === "conflict"
+                      ? "Bazar hodnotí cenu opačně než náš model — opatrně"
+                      : "Hodnocení ceny podle bazaru (doplňkový signál k našemu skóre)"
+                }
+              >
+                {priceRatingLabel(listing.price_rating)}
+                {listing.portal_agreement === "agree" && " ✓"}
+                {listing.portal_agreement === "conflict" && " ?"}
+              </span>
+            )
           )}
         </div>
         <div className="card-foot">

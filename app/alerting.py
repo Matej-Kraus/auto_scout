@@ -42,9 +42,9 @@ def process_alerts(session: Session, diff: DiffResult) -> int:
     """Projde novinky a zlevneni, posle alerty. Vraci pocet odeslanych."""
     sent = 0
 
-    candidates: list[tuple[Listing, str, int | None]] = [
-        (lst, "new", None) for lst in diff.new
-    ] + [(lst, "price_drop", old) for (lst, old) in diff.price_drops]
+    candidates: list[tuple[Listing, str, int | None]] = [(lst, "new", None) for lst in diff.new] + [
+        (lst, "price_drop", old) for (lst, old) in diff.price_drops
+    ]
 
     alerted_new: list[Listing] = []  # vozy uz alertovane v tomhle behu (cross-portal)
 

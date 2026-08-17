@@ -28,11 +28,15 @@ class ListingOut(BaseModel):
     first_seen: datetime
     last_seen: datetime
     is_active: bool
-    # scoring (dopocitano za behu)
+    # scoring (dopocitano za behu, viz app/scoring/engine.py)
     deal_score: float | None = None
     expected_price: float | None = None
     pct_below: float | None = None
     score_method: str | None = None
+    deal_tier: str = "none"  # hot | good | fair | none — kalibruje backend, ne frontend
+    confidence: float = 0.0  # 0-1, jak silna data za skore stoji
+    portal_agreement: str | None = None  # agree | conflict — shoda s hodnocenim burzy
+    implausible: str | None = None  # damage | mileage | price — proc inzeratu neverime
 
 
 class PricePoint(BaseModel):

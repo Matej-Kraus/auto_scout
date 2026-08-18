@@ -91,11 +91,14 @@ _SEARCH_URL = (
 )
 
 
-def resolve_missing_makes(catalog: dict, makes: list[str]) -> int:
+def resolve_missing_makes(catalog: dict, makes: list[str], force: bool = False) -> int:
     """Dotahne z mobile.de znacky/modely, ktere v katalogu chybi. Vraci pocet pridanych.
 
     Jeden pruchod strankou na davku (vyber znacky ve <select name="mk"> naplni
     <select name="md">). Bezi jen z lokalni rezidencni IP — viz mobilede_local.
+
+    `force=True` dotahne seznam modelu i pro znacku, kterou uz castecne zname —
+    potreba, kdyz uzivatel prida napr. VW Passat a my mame ulozeny jen VW Golf.
     """
     from scrapling.fetchers import StealthyFetcher
 
@@ -105,11 +108,15 @@ def resolve_missing_makes(catalog: dict, makes: list[str]) -> int:
     todo = []
     for raw_make in makes:
         mk = make_key(raw_make)
-        # znacku bereme, kdyz nemame jeji id NEBO pro ni nemame zadne modely
+        if mk in todo:
+            continue
+        if force:
+            todo.append(mk)
+            continue
+        # bez force bereme znacku, jen kdyz o ni nevime vubec nic
         has_models = any(k.startswith(f"{mk}:") for k in catalog["models"])
         if mk not in catalog["makes"] or not has_models:
-            if mk not in todo:
-                todo.append(mk)
+            todo.append(mk)
 
     if not todo:
         return 0
@@ -174,4 +181,39 @@ def resolve_missing_makes(catalog: dict, makes: list[str]) -> int:
         timeout=60000,
         page_action=action,
     )
+    return added
+
+
+def ensure_catalog_for_watches(watches) -> int:
+    """Dotahne ID pro watche, ktere je jeste nemaji. Vraci pocet pridanych zaznamu.
+
+    Vola se pred kazdym scrapovanim mobile.de, takze auto pridane pres web
+    funguje hned — driv spadlo na fulltext, ktery mobile.de tise ignoruje
+    a vraci nesouvisejici auta.
+
+    Sit muze selhat (Akamai) — to neni duvod shodit cely beh, jen se u toho
+    watche pouzije slabsi fulltext a priste se zkusi znovu.
+    """
+    catalog = load_catalog()
+    missing: list[str] = []
+    for watch in watches:
+        md = watch.portal_params.get("mobilede") or {}
+        make, model = md.get("make"), md.get("model")
+        if make and model and resolve_ids(make, model, catalog) is None:
+            if make not in missing:
+                missing.append(make)
+
+    if not missing:
+        return 0
+
+    logger.info("mobilede katalog: chybi ID pro %s, dotahuji", ", ".join(missing))
+    try:
+        added = resolve_missing_makes(catalog, missing, force=True)
+    except Exception:  # noqa: BLE001 — bez katalogu jede fulltext fallback
+        logger.warning("mobilede katalog: dotazeni selhalo, zkusim priste", exc_info=True)
+        return 0
+
+    if added:
+        save_catalog(catalog)
+        logger.info("mobilede katalog: pridano %d zaznamu", added)
     return added

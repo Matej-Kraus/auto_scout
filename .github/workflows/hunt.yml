@@ -1,11 +1,15 @@
 name: hunt
 
-# Cron kazdych 30 min + moznost rucniho spusteni.
-# Pozn.: public repo se po 60 dnech neaktivity sam vypne (CLAUDE.md §8) —
-# obcas pushni commit, nebo nech bezet jiny workflow jako heartbeat.
+# VYPNUTO (8/2026): projekt bezi jen lokalne — vsechny portaly vcetne mobile.de
+# stahuje `scripts/run_daily_local.py` (launchd 1x denne) do local.db, kterou cte
+# dashboard na localhostu. Hodinovy cron do Neonu uz nikdo necetl, takze jen
+# spotreboval Actions minuty a plnil starou DB.
+#
+# Zapnuti zpet = odkomentovat `schedule` (a zkontrolovat DATABASE_URL secret).
+# Rucne jde workflow spustit kdykoliv pres Actions -> hunt -> Run workflow.
 on:
-  schedule:
-    - cron: "0 * * * *"   # kazdou celou hodinu
+  # schedule:
+  #   - cron: "0 * * * *"   # kazdou celou hodinu
   workflow_dispatch:
 
 concurrency:

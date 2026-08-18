@@ -77,3 +77,76 @@ def test_resolve_ids(make, model, expected):
 
 def test_resolve_ids_tolerates_empty_catalog():
     assert resolve_ids("VW", "Golf", {}) is None
+
+
+# --- automaticke doplneni pri pridani noveho auta ---
+
+
+def test_ensure_catalog_skips_network_when_all_known(monkeypatch):
+    """Kdyz katalog vsechno zna, nesahne se na sit vubec."""
+    from app.config import Watch
+    from app import mobilede_catalog as mc
+
+    called = False
+
+    def boom(*a, **kw):
+        nonlocal called
+        called = True
+        return 0
+
+    monkeypatch.setattr(mc, "load_catalog", lambda: CATALOG)
+    monkeypatch.setattr(mc, "resolve_missing_makes", boom)
+
+    watch = Watch(
+        model="golf_gti",
+        generation="mk7",
+        label="VW Golf GTI",
+        portal_params={"mobilede": {"make": "VW", "model": "Golf"}},
+    )
+    assert mc.ensure_catalog_for_watches([watch]) == 0
+    assert called is False
+
+
+def test_ensure_catalog_fetches_unknown_make(monkeypatch):
+    from app.config import Watch
+    from app import mobilede_catalog as mc
+
+    asked: list[list[str]] = []
+
+    def fake_resolve(catalog, makes, force=False):
+        asked.append(makes)
+        assert force is True  # znamou znacku je nutne prenacist kvuli novemu modelu
+        return 3
+
+    monkeypatch.setattr(mc, "load_catalog", lambda: dict(CATALOG))
+    monkeypatch.setattr(mc, "resolve_missing_makes", fake_resolve)
+    monkeypatch.setattr(mc, "save_catalog", lambda c: None)
+
+    watch = Watch(
+        model="tesla_m3",
+        generation="vse",
+        label="Tesla Model 3",
+        portal_params={"mobilede": {"make": "Tesla", "model": "Model 3"}},
+    )
+    assert mc.ensure_catalog_for_watches([watch]) == 3
+    assert asked == [["Tesla"]]
+
+
+def test_ensure_catalog_survives_network_failure(monkeypatch):
+    """Vypadek site nesmi shodit beh — jen se pouzije slabsi fulltext."""
+    from app.config import Watch
+    from app import mobilede_catalog as mc
+
+    def boom(*a, **kw):
+        raise RuntimeError("Akamai")
+
+    monkeypatch.setattr(mc, "load_catalog", lambda: dict(CATALOG))
+    monkeypatch.setattr(mc, "resolve_missing_makes", boom)
+
+    watch = Watch(
+        model="tesla_m3",
+        generation="vse",
+        label="Tesla",
+        portal_params={"mobilede": {"make": "Tesla", "model": "Model 3"}},
+    )
+    assert mc.ensure_catalog_for_watches([watch]) == 0

@@ -39,6 +39,9 @@ import numpy as np
 
 from app.config import (
     BUDGET_MAX_CZK,
+    MILEAGE_RISK_FLOOR,
+    MILEAGE_RISK_FREE_KM,
+    MILEAGE_RISK_SPAN_KM,
     MIN_SAMPLES_FOR_REGRESSION,
     PORTAL_RATING_WEIGHT,
     SCORE_CONFIDENCE_K,
@@ -128,6 +131,23 @@ MIN_PLAUSIBLE_KM_PER_YEAR = 700  # pod tim je najezd u starsiho auta nevěrohodn
 MIN_PLAUSIBLE_PRICE_RATIO = 0.35  # pod 35 % medianu skupiny = dily/vrak/preklik
 
 
+def mileage_risk(mileage_km: int | None) -> float:
+    """Nasobitel skore podle najezdu (1.0 = bez postihu, min. 0.4).
+
+    Oddelene od trzniho modelu zamerne: model uz umi rict, ze ojete auto ma nizsi
+    CENU, ale neumi rict, ze je to horsi KOUPE. I spravne nacenene auto s 300 tis.
+    km je pri stejne procentualni sleve rizikovejsi nez se 100 tis. — zbyva mu min
+    zivota, blizi se drahe servisni polozky a hur se prodava dal.
+
+    Do 150 tis. km bez postihu, pak plynule dolu; strop dole brani tomu, aby
+    vrakoviste vytesnilo cokoli jineho.
+    """
+    if mileage_km is None:
+        return 0.85  # neznamy najezd je taky riziko, ale mirnejsi nez znamy vysoky
+    over = max(0, mileage_km - MILEAGE_RISK_FREE_KM)
+    return max(1.0 - over / MILEAGE_RISK_SPAN_KM, MILEAGE_RISK_FLOOR)
+
+
 def implausibility_reason(listing: Listing, group_median_price: float | None) -> str | None:
     """Proc inzeratu neverit (nebo None kdyz je v poradku).
 
@@ -208,9 +228,22 @@ def _robust_fit(x: np.ndarray, y: np.ndarray, iters: int = 8) -> tuple[np.ndarra
 
 
 def _features(year: int, mileage_km: int, now_year: int) -> list[float]:
-    """[1, stari, log1p(km)] — viz docstring modulu, proc prave takhle."""
+    """[1, stari, km/100tis., log1p(km)] — dva cleny na najezd zameрne.
+
+    Samotny log1p(km) (puvodni verze) konec stupnice prilis zplostil: model pak
+    tvrdil, ze Golf GTI 2014 s 350 tis. km stoji 281 tis. Kc — jen o 29 % min nez
+    stejne auto s 50 tis. km. Ojeta auta tim vychazela jako "40 % pod trhem"
+    a zaplavovala zebricek dealu (300k+ km melo 3x vetsi sanci na "hot" nez
+    auto do 100 tis. km — presne naopak, nez kupujici chce).
+
+    Kombinace obou clenu drzi strmy pokles na zacatku (log) a zaroven pokracuje
+    v poklesu i u vysokych najezdu (linearni). Overeno na realnych datech:
+    predikce pro 350 tis. km klesla z 281 tis. na 205 tis. Kc, coz sedi na
+    skutecne inzeraty (167-176 tis.).
+    """
     age = max(now_year - year, 0)
-    return [1.0, float(age), float(np.log1p(max(mileage_km, 0)))]
+    km = max(mileage_km, 0)
+    return [1.0, float(age), km / 100_000.0, float(np.log1p(km))]
 
 
 def _market_model(samples: list[Listing], target: Listing) -> tuple[float | None, float, str]:
@@ -223,8 +256,11 @@ def _market_model(samples: list[Listing], target: Listing) -> tuple[float | None
         if s.year is not None and s.mileage_km is not None and s.price_czk and s.price_czk > 0
     ]
 
+    # Model ma 4 parametry, takze 8 vzorku uz je na stabilni fit malo — pod
+    # ~3 vzorky na parametr se preucuje a vyraba nesmyslne predikce.
+    min_for_regression = max(MIN_SAMPLES_FOR_REGRESSION, 12)
     if (
-        len(rows) >= MIN_SAMPLES_FOR_REGRESSION
+        len(rows) >= min_for_regression
         and target.year is not None
         and target.mileage_km is not None
     ):
@@ -375,7 +411,16 @@ def score_listing(listing: Listing, samples: list[Listing]) -> DealScore:
     elif agreement == "conflict":
         conf *= 0.7
 
+    # Postih za najezd: trzni model uz umi rict, ze ojete auto ma nizsi CENU,
+    # ale ne, ze je to horsi KOUPE. Bez tohohle mela auta nad 300 tis. km 3x
+    # vetsi sanci na "hot" nez auta do 100 tis. (overeno na realnych datech).
+    # Aplikuje se jen na kladne skore — u predrazenych aut by postih paradoxne
+    # zlepsoval poradi.
+    risk = mileage_risk(listing.mileage_km)
     z_final = z_combined * conf
+    if z_final > 0:
+        z_final *= risk
+
     # Nedůveryhodny inzerat nikdy nedostane tier — jinak by vraky a prekliky
     # v cene obsadily cely zebricek "nejlepsich dealu" (overeno na realnych datech).
     tier = "none" if implausible else _tier_for(z_final, pct_below, conf)

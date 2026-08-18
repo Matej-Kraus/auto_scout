@@ -1177,7 +1177,10 @@ body::after {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin-left: auto; /* odsune se doprava, at nesplyva s prepinaci */
+}
+/* Export + razeni drzime spolu vpravo, oddelene od prepinacu vlevo. */
+.deck-row .pill[title^="Stáhne"] {
+  margin-left: auto;
 }
 .sortlbl {
   font-family: var(--mono);

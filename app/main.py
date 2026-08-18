@@ -362,6 +362,11 @@ def trigger_run(
             from app.watch_builder import ensure_mobilede_params
 
             watches = [ensure_mobilede_params(w) for w in watches]
+            # Nove auto jeste nemusi mit ID mobile.de — dotahni je, jinak by
+            # scraper spadl na fulltext, ktery mobile.de tise ignoruje.
+            from app.mobilede_catalog import ensure_catalog_for_watches
+
+            ensure_catalog_for_watches(watches)
             try:
                 from app.scrapers.mobilede_local import MobileDeLocalScraper
 

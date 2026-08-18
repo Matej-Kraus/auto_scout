@@ -295,6 +295,14 @@ PORTAL_RATING_WEIGHT = 0.6
 # na "hot deal", i kdyby cena vypadala skvele.
 SCORE_CONFIDENCE_K = 25
 
+# Postih za najezd (viz scoring/engine.mileage_risk). Do RISK_FREE bez postihu,
+# pak linearne dolu az na FLOOR. 150k/400k/0.4 => 200k km ~0.88, 300k ~0.63,
+# 350k ~0.5. Zamerem je, aby ojeta auta neobsazovala zebricek dealu, i kdyz jsou
+# vuci sve (spravne nizke) trzni cene levna.
+MILEAGE_RISK_FREE_KM = 150_000
+MILEAGE_RISK_SPAN_KM = 400_000
+MILEAGE_RISK_FLOOR = 0.4
+
 # Kalibrace tieru: (nazev, (min z-skore, min uspora v %)). Musi platit OBOJI.
 # Poradi od nejlepsiho — bere se prvni, na ktery inzerat dosahne.
 # Prahy jsou nastavene tak, aby "hot" bylo vzacne (jednotky % nabidky), jinak

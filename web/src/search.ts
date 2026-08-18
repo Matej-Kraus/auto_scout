@@ -241,3 +241,29 @@ export function sortClusters(clusters: Cluster[], sort: SortKey): Cluster[] {
       return by((l) => l.deal_score, -1); // výchozí: nejlepší deal nahoře
   }
 }
+
+/** Lidsky čitelný popis aktivních filtrů — jde do hlavičky exportu. */
+export function describeSearch(s: SearchState, modelLabel?: string): string {
+  const parts: string[] = [];
+  if (modelLabel) parts.push(modelLabel);
+  if (s.query.trim()) parts.push(`hledání "${s.query.trim()}"`);
+  const range = (label: string, from: number | null, to: number | null, unit = "") => {
+    if (from == null && to == null) return;
+    if (from != null && to != null) parts.push(`${label} ${from}–${to}${unit}`);
+    else if (from != null) parts.push(`${label} od ${from}${unit}`);
+    else parts.push(`${label} do ${to}${unit}`);
+  };
+  range("cena", s.priceFrom, s.priceTo, " Kč");
+  range("rok", s.yearFrom, s.yearTo);
+  range("nájezd", s.kmFrom, s.kmTo, " km");
+  range("výkon", s.kwFrom, s.kwTo, " kW");
+  if (s.transmission) parts.push(s.transmission === "manual" ? "manuál" : "automat");
+  if (s.drivetrain) parts.push(s.drivetrain.toUpperCase());
+  if (s.fuel) parts.push(s.fuel);
+  if (s.body) parts.push(s.body);
+  if (s.source) parts.push(`jen ${s.source}`);
+  if (s.newOnly) parts.push("jen nové");
+  if (s.favoritesOnly) parts.push("jen oblíbené");
+  parts.push(`řazeno: ${SORT_LABELS[s.sort].toLowerCase()}`);
+  return parts.length ? parts.join(", ") : "bez filtru";
+}

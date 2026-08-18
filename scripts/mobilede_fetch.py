@@ -14,6 +14,7 @@ import logging
 import sys
 
 from app.db import init_db, session_scope
+from app.mobilede_catalog import ensure_catalog_for_watches
 from app.models import Listing
 from app.pipeline import _upsert
 from app.run_once import load_all_watches
@@ -41,6 +42,7 @@ def main() -> int:
             print(f"Neznamy model_key '{model_key}'. Dostupne:", ", ".join(sorted(watches)))
             return 1
 
+        ensure_catalog_for_watches([watch])
         query = SearchQuery.from_watch(watch, "mobilede")
         logger.info("mobile.de dotaz: %r (roky %s-%s)", query.params.get("text"),
                     query.params.get("year_from"), query.params.get("year_to"))

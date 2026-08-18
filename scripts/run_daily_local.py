@@ -20,6 +20,7 @@ import logging
 
 from app.alerting import process_alerts
 from app.db import init_db, session_scope
+from app.mobilede_catalog import ensure_catalog_for_watches
 from app.pipeline import run_pipeline
 from app.retention import prune_price_history
 from app.run_once import build_scrapers, load_all_watches
@@ -36,6 +37,8 @@ def main() -> None:
 
     with session_scope() as session:
         watches = [ensure_mobilede_params(w) for w in load_all_watches(session)]
+        # Auta pridana od minule jeste nemusi mit ID mobile.de (viz mobilede_catalog).
+        ensure_catalog_for_watches(watches)
         logger.info("hlidam %d aut: %s", len(watches), ", ".join(w.label for w in watches))
         diff = run_pipeline(session, watches, scrapers)
         sent = process_alerts(session, diff)

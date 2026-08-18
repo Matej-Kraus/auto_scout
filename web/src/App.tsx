@@ -11,6 +11,7 @@ import {
   runScan,
 } from "./api";
 import { Drawer } from "./Drawer";
+import { buildExport, downloadExport } from "./export";
 import { FilterPanel } from "./FilterPanel";
 import {
   bodyLabel,
@@ -40,6 +41,7 @@ import {
   type Cluster,
   EMPTY_SEARCH,
   isNew,
+  describeSearch,
   isSearchActive,
   type SearchState,
   SORT_LABELS,
@@ -355,6 +357,19 @@ export function App() {
               Skryté<em>{hiddenCount}</em>
             </button>
           )}
+          <button
+            className="pill"
+            title="Stáhne zobrazená auta jako .md soubor — dá se rovnou předat AI k posouzení"
+            disabled={!clusters || clusters.length === 0}
+            onClick={() => {
+              if (!clusters) return;
+              const shown = clusters.slice(0, visibleCount);
+              const note = describeSearch(search, filter ? labelFor(filter) : undefined);
+              downloadExport(buildExport(shown, note), shown.length);
+            }}
+          >
+            ⬇ Export{clusters && clusters.length > 0 && <em>{Math.min(clusters.length, visibleCount)}</em>}
+          </button>
           <label className="sortwrap">
             <span className="sortlbl">Řadit</span>
             <select

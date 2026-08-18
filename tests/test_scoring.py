@@ -15,6 +15,7 @@ from app.models import Listing
 from app.scoring.engine import (
     DealScore,
     implausibility_reason,
+    mileage_risk,
     score_listing,
 )
 
@@ -278,3 +279,36 @@ def test_deal_score_dataclass_defaults():
     assert sc.tier == "none"
     assert sc.confidence == 0.0
     assert sc.is_alertable
+
+
+# --- postih za najezd ---
+# Bez nej mela auta nad 300 tis. km 3x vetsi sanci na "hot" nez auta do 100 tis.
+
+
+def test_mileage_risk_curve():
+    assert mileage_risk(80_000) == 1.0  # do 150 tis. bez postihu
+    assert mileage_risk(150_000) == 1.0
+    assert mileage_risk(250_000) < mileage_risk(180_000) < 1.0
+    assert mileage_risk(400_000) == pytest.approx(0.4)  # dolni strop
+    assert mileage_risk(900_000) == pytest.approx(0.4)
+    assert 0.4 < mileage_risk(None) < 1.0  # neznamy najezd = mirne riziko
+
+
+def test_high_mileage_ranks_below_equal_bargain():
+    """Stejna procentualni sleva na ojetem aute = horsi koupe."""
+    group = market(120)
+    low = make(150_000, year=2016, km=90_000, source_id="low")
+    high = make(150_000, year=2016, km=320_000, source_id="high")
+    sc_low = score_listing(low, group + [low])
+    sc_high = score_listing(high, group + [high])
+    assert sc_low.value > sc_high.value
+
+
+def test_model_keeps_depreciating_at_high_mileage():
+    """log1p(km) sam konec stupnice zplostoval — 350 tis. km musi byt vyrazne
+    levnejsi nez 200 tis., ne skoro stejne."""
+    group = market(120)
+    at200 = score_listing(make(300_000, year=2015, km=200_000, source_id="a"), group)
+    at350 = score_listing(make(300_000, year=2015, km=350_000, source_id="b"), group)
+    drop = 1 - at350.expected_price / at200.expected_price
+    assert drop > 0.12, f"pokles jen {drop:.0%} — model ojetost nedostatecne trestá"

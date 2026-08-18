@@ -22,7 +22,20 @@ export interface SearchState {
   favoritesOnly: boolean;
   showHidden: boolean;
   newOnly: boolean; // jen auta naskočená za posledních NEW_HOURS
+  sort: SortKey; // jak řadit výsledky
 }
+
+/** Řazení. "deal" = naše skóre (výchozí), zbytek jsou prosté atributy. */
+export type SortKey = "deal" | "price_asc" | "price_desc" | "km_asc" | "year_desc" | "newest";
+
+export const SORT_LABELS: Record<SortKey, string> = {
+  deal: "Nejlepší deal",
+  price_asc: "Nejlevnější",
+  price_desc: "Nejdražší",
+  km_asc: "Nejnižší nájezd",
+  year_desc: "Nejnovější ročník",
+  newest: "Naposled přidané",
+};
 
 // Auto je "nové", pokud ho systém poprvé viděl za posledních 48 h.
 export const NEW_HOURS = 48;
@@ -51,6 +64,7 @@ export const EMPTY_SEARCH: SearchState = {
   favoritesOnly: false,
   showHidden: false,
   newOnly: false,
+  sort: "deal",
 };
 
 export function isSearchActive(s: SearchState): boolean {
@@ -193,4 +207,37 @@ export function clusterListings(listings: Listing[]): Cluster[] {
     clusters.push(cluster);
   }
   return clusters;
+}
+
+/**
+ * Seřadí clustery. Backend vrací data už podle deal skóre, ale uživatel může
+ * chtít jiný pohled — a řadit až po clusterování je správně, protože primary
+ * cluster nese tu nejlepší nabídku daného vozu.
+ */
+export function sortClusters(clusters: Cluster[], sort: SortKey): Cluster[] {
+  const by = (f: (l: Listing) => number | null, dir: 1 | -1 = 1) =>
+    [...clusters].sort((a, b) => {
+      const va = f(a.primary);
+      const vb = f(b.primary);
+      // chybějící hodnota vždy na konec, ať nezaclání
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1;
+      if (vb == null) return -1;
+      return (va - vb) * dir;
+    });
+
+  switch (sort) {
+    case "price_asc":
+      return by((l) => l.price_czk);
+    case "price_desc":
+      return by((l) => l.price_czk, -1);
+    case "km_asc":
+      return by((l) => l.mileage_km);
+    case "year_desc":
+      return by((l) => l.year, -1);
+    case "newest":
+      return by((l) => new Date(l.first_seen).getTime(), -1);
+    default:
+      return by((l) => l.deal_score, -1); // výchozí: nejlepší deal nahoře
+  }
 }

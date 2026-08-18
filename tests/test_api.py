@@ -98,3 +98,40 @@ def test_status_endpoint(client):
     # pri nizke duvere skore stahuje (viz SCORE_CONFIDENCE_K). Kalibraci tieru
     # testuje tests/test_scoring.py na realistickem vzorku.
     assert st["hot_deals"] == 0
+
+
+def test_junk_listings_hidden_by_default(client, monkeypatch):
+    """Bourana auta a vraky se v seznamu vubec neobjevi."""
+    from datetime import datetime, timezone
+
+    from app import main as m
+
+    now = datetime.now(timezone.utc)
+    with m.SessionLocal() as s:
+        s.add(
+            Listing(
+                source="kleinanzeigen",
+                source_id="wreck",
+                model="audi_s3",
+                generation="8p",
+                year=2010,
+                mileage_km=140_000,
+                price_czk=60_000,
+                price_original=60_000,
+                currency="CZK",
+                url="https://x/wreck",
+                title="Audi S3 Frontschaden",
+                first_seen=now,
+                last_seen=now,
+                is_active=True,
+            )
+        )
+        s.commit()
+
+    urls = [d["url"] for d in client.get("/api/listings").json()]
+    assert "https://x/wreck" not in urls
+
+    # pro diagnostiku je porad dosahnutelne
+    junk = client.get("/api/listings?include_junk=true").json()
+    wreck = next(d for d in junk if d["url"] == "https://x/wreck")
+    assert wreck["implausible"] == "damage"

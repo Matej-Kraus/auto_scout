@@ -67,6 +67,17 @@ export const sourceLabel = (s: string) =>
 // takze ho umi kalibrovat; frontend ho jen zobrazuje.
 export type DealTier = "hot" | "good" | "fair" | "none";
 
+/**
+ * Skóre z backendu je z-skóre (kolik směrodatných odchylek pod trhem) a je
+ * NEOMEZENÉ — prosté ×100 dávalo na kartách nesmysly jako "424". Tahle křivka
+ * ho zmáčkne do čitelné škály 0–100, která roste rychle u běžných hodnot
+ * a nasycuje se u extrémů: fair ≈ 18, good ≈ 39, hot ≈ 59, výjimečné ≈ 90+.
+ */
+export function dealIndex(score: number | null): number {
+  if (score == null || score <= 0) return 0;
+  return Math.min(99, Math.round(100 * (1 - Math.exp(-score / 2))));
+}
+
 // Proc inzeratu neverime — vysvetlivka k odznaku na karte.
 const IMPLAUSIBLE_LABELS: Record<string, string> = {
   damage: "poškozené / na díly",

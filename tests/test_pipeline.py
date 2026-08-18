@@ -88,3 +88,88 @@ def test_stale_listing_deactivated(session):
     l2 = session.query(Listing).filter_by(source_id="2").one()
     assert l1.is_active is True
     assert l2.is_active is False
+
+
+# --- zpetne vynucovani kriterii watche ---
+# Bez tohohle po zmene filtru (nebo opravene chybe v matchovani) zustaval v DB
+# stary odpad az do vyprseni staleness a musel se mazat rucne.
+
+STRICT_WATCH = Watch(
+    model="bmw_130i",
+    generation="e87",
+    label="BMW 130i E87",
+    portal_params={
+        "sauto": {
+            "name_includes": ["130i"],
+            "year_from": 2005,
+            "year_to": 2013,
+            "price_to": 450_000,
+        }
+    },
+)
+
+
+def _seed(session, **kw):
+    """Ulozi aktivni inzerat s vychozimi hodnotami, ktere kriteriim vyhovuji."""
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
+    defaults = dict(
+        source="sauto",
+        source_id="seed",
+        model="bmw_130i",
+        generation="e87",
+        year=2011,
+        mileage_km=140_000,
+        price_czk=300_000,
+        price_original=300_000,
+        currency="CZK",
+        url="https://x/seed",
+        title="BMW 130i manuál",
+        first_seen=now,
+        last_seen=now,
+        is_active=True,
+    )
+    lst = Listing(**{**defaults, **kw})
+    session.add(lst)
+    session.flush()
+    return lst
+
+
+def test_listing_with_wrong_name_is_dropped(session):
+    bad = _seed(session, source_id="bad", title="BMW 120d")
+    good = _seed(session, source_id="good", title="BMW 130i")
+
+    diff = run_pipeline(session, [STRICT_WATCH], [FakeScraper([[]])])
+
+    assert diff.dropped == 1
+    assert bad.is_active is False
+    assert good.is_active is True
+
+
+def test_listing_over_price_cap_is_dropped(session):
+    pricey = _seed(session, source_id="pricey", price_czk=600_000)
+    run_pipeline(session, [STRICT_WATCH], [FakeScraper([[]])])
+    assert pricey.is_active is False
+
+
+def test_listing_outside_year_range_is_dropped(session):
+    old = _seed(session, source_id="old", year=2002)
+    new = _seed(session, source_id="new", year=2020)
+    run_pipeline(session, [STRICT_WATCH], [FakeScraper([[]])])
+    assert old.is_active is False
+    assert new.is_active is False
+
+
+def test_missing_year_is_not_dropped(session):
+    """Chybejici udaj neni duvod k vyrazeni — nekterym portalum proste chybi."""
+    unknown = _seed(session, source_id="unknown", year=None)
+    run_pipeline(session, [STRICT_WATCH], [FakeScraper([[]])])
+    assert unknown.is_active is True
+
+
+def test_watch_without_criteria_drops_nothing(session):
+    anything = _seed(session, source_id="any", title="uplne jine auto", year=1990)
+    diff = run_pipeline(session, [WATCH], [FakeScraper([[]])])  # WATCH nema portal_params
+    assert diff.dropped == 0
+    assert anything.is_active is True

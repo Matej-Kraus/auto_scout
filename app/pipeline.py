@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.config import STALE_AFTER_HOURS, Watch
 from app.models import Alert, Listing, PriceHistory
 from app.normalize import normalize
-from app.scrapers.base import RawListing, Scraper, SearchQuery
+from app.scrapers.base import RawListing, Scraper, SearchQuery, title_matches
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +28,13 @@ class DiffResult:
     new: list[Listing] = field(default_factory=list)
     price_drops: list[tuple[Listing, int]] = field(default_factory=list)  # (listing, stara_cena)
     failures: list[tuple[str, str, str]] = field(default_factory=list)  # (scraper, watch, chyba)
+    dropped: int = 0  # vyrazeno, protoze uz nesedi na kriteria watche
 
     @property
     def summary(self) -> str:
         base = f"{len(self.new)} novych, {len(self.price_drops)} zlevneni"
+        if self.dropped:
+            base += f", {self.dropped} vyrazeno (nesedi na watch)"
         return base + (f", {len(self.failures)} chyb scraperu" if self.failures else "")
 
 
@@ -63,9 +66,80 @@ def run_pipeline(
                     diff.price_drops.append((_listing, change[1]))
 
     _deactivate_stale(session)
+    diff.dropped = _enforce_watch_criteria(session, watches)
     session.flush()
     logger.info("pipeline diff: %s", diff.summary)
     return diff
+
+
+def watch_criteria(watch: Watch) -> dict:
+    """Sjednoceny pohled na kriteria watche napric portaly (pro zpetnou kontrolu).
+
+    Portal params se lisi (CZK vs EUR, ruzne klice), tady nas zajima jen to, co
+    jde overit na ulozenem Listingu: tokeny v nazvu, rozsah roku, strop ceny v CZK.
+    """
+    sauto = watch.portal_params.get("sauto", {})
+    sbazar = watch.portal_params.get("sbazar", {})
+    base = sauto or sbazar
+
+    tokens = base.get("name_includes") or []
+    # Kdyz nema sauto/sbazar tokeny, zkus DE portaly (uzivatelske watche je maji vsude).
+    if not tokens:
+        for key in ("autoscout24", "kleinanzeigen", "mobilede"):
+            tokens = watch.portal_params.get(key, {}).get("name_includes") or []
+            if tokens:
+                break
+
+    return {
+        "name_includes": tokens,
+        "year_from": base.get("year_from"),
+        "year_to": base.get("year_to"),
+        "price_to": base.get("price_to"),  # CZK (sauto/sbazar jedou v korunach)
+    }
+
+
+def _matches_criteria(lst: Listing, crit: dict) -> bool:
+    """Sedi ulozeny inzerat porad na kriteria sveho watche?
+
+    Rok a cena se kontroluji jen kdyz je zname — chybejici udaj neni duvod
+    k vyrazeni (nekterym portalum proste chybi).
+    """
+    if not title_matches(lst.title, crit["name_includes"]):
+        return False
+    if crit["year_from"] and lst.year is not None and lst.year < crit["year_from"]:
+        return False
+    if crit["year_to"] and lst.year is not None and lst.year > crit["year_to"]:
+        return False
+    if crit["price_to"] and lst.price_czk and lst.price_czk > crit["price_to"]:
+        return False
+    return True
+
+
+def _enforce_watch_criteria(session: Session, watches: list[Watch]) -> int:
+    """Deaktivuje aktivni inzeraty, ktere uz nesedi na kriteria sveho watche.
+
+    Bez tohohle po kazde zmene filtru (nebo opravene chybe v matchovani) zustaval
+    stary odpad v DB az do vyprseni staleness — a musel se maza rucne. Ted se
+    to srovna samo pri kazdem behu.
+    """
+    dropped = 0
+    for watch in watches:
+        crit = watch_criteria(watch)
+        if not any(crit.values()):
+            continue  # watch bez kriterii — neni co vynucovat
+
+        listings = session.scalars(
+            select(Listing).where(Listing.model == watch.model, Listing.is_active.is_(True))
+        ).all()
+
+        for lst in listings:
+            if not _matches_criteria(lst, crit):
+                lst.is_active = False
+                dropped += 1
+
+    if dropped:
+        logger.info("vyrazeno %d inzeratu nesedicich na kriteria watche", dropped)
+    return dropped
 
 
 def _upsert(session: Session, raw: RawListing, watch: Watch):

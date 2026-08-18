@@ -875,6 +875,19 @@ body::after {
   }
 }
 
+/* ---------- responzivita ----------
+   Tri zlomy: tablet (1024) zuzi mrizku karet, telefon (760) sklada sloupce
+   pod sebe, uzky telefon (430) zmensi typografii a da vsemu plnou sirku. */
+
+@media (max-width: 1024px) {
+  .statrow {
+    grid-template-columns: repeat(2, 1fr); /* 4 dlazdice vedle sebe uz jsou uzke */
+  }
+  .cards {
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  }
+}
+
 @media (max-width: 760px) {
   .shell {
     padding: 0 14px 72px;
@@ -895,6 +908,45 @@ body::after {
   }
   .gauge {
     margin: 0 auto;
+  }
+  .masthead {
+    padding: 22px 0 16px;
+  }
+  .readout {
+    text-align: left; /* pod znackou, ne pritisknute vpravo */
+  }
+  /* Dotykove cile: 44 px je minimum, ktere se da spolehlive trefit prstem. */
+  .pill,
+  .sortbtn {
+    padding: 11px 16px;
+    min-height: 44px;
+  }
+  .starbtn,
+  .hidebtn {
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+  }
+}
+
+@media (max-width: 430px) {
+  .shell {
+    padding: 0 10px 72px;
+  }
+  .statrow {
+    grid-template-columns: 1fr; /* pod sebe, at jsou cisla citelna */
+  }
+  .addform {
+    grid-template-columns: 1fr;
+  }
+  .cards {
+    grid-template-columns: 1fr;
+  }
+  .card-title {
+    font-size: 14px;
+  }
+  .search-input {
+    font-size: 16px; /* pod 16px iOS pri fokusu zoomuje stranku */
   }
 }
 
@@ -1118,4 +1170,70 @@ body::after {
 @media (max-width: 620px) {
   .frow { grid-template-columns: 1fr; gap: 6px; }
   .frow-num { width: 80px; }
+}
+
+/* ---------- razeni ---------- */
+.sortwrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto; /* odsune se doprava, at nesplyva s prepinaci */
+}
+.sortlbl {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--text-faint);
+  text-transform: uppercase;
+}
+.sortbtn {
+  font-family: var(--cond);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  padding: 7px 12px;
+  border: 1px solid var(--line-bright);
+  background: var(--bg-raised);
+  color: var(--text-dim);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.sortbtn:hover,
+.sortbtn:focus {
+  border-color: var(--amber);
+  color: var(--text);
+  outline: none;
+}
+
+/* ---------- "proc je to deal" ---------- */
+.why {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(48, 61, 73, 0.7);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.03em;
+}
+.why-main {
+  color: var(--good);
+  font-weight: 600;
+}
+.why-conf {
+  color: var(--text-faint);
+}
+.why-conf-hi {
+  color: var(--good);
+}
+.why-conf-mid {
+  color: var(--fair);
+}
+.why-conf-lo {
+  color: var(--text-faint);
+}
+.why-agree {
+  color: var(--steel);
 }

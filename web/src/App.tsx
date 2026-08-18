@@ -15,6 +15,7 @@ import { FilterPanel } from "./FilterPanel";
 import {
   bodyLabel,
   czk,
+  dealIndex,
   implausibleLabel,
   drivetrainLabel,
   fuelLabel,
@@ -41,6 +42,9 @@ import {
   isNew,
   isSearchActive,
   type SearchState,
+  SORT_LABELS,
+  type SortKey,
+  sortClusters,
 } from "./search";
 import type { Listing, Status, Watch } from "./types";
 
@@ -133,13 +137,21 @@ export function App() {
   useEffect(() => setVisibleCount(48), [search, filter]);
   const clusters = useMemo<Cluster[] | null>(() => {
     if (matched == null) return null;
-    if (!search.dedupe) return matched.map((l) => ({ primary: l, duplicates: [] }));
-    return clusterListings(matched);
-  }, [matched, search.dedupe]);
+    const grouped = search.dedupe
+      ? clusterListings(matched)
+      : matched.map((l) => ({ primary: l, duplicates: [] }));
+    return sortClusters(grouped, search.sort);
+  }, [matched, search.dedupe, search.sort]);
 
+  // Hero = nejlepsi deal, ale jen kdyz radime podle dealu; pri jinem razeni by
+  // vytrzene auto nahore matlo (uzivatel chce videt sve poradi).
   const heroCluster = useMemo(
-    () => clusters?.find((c) => c.primary.deal_score != null) ?? null,
-    [clusters],
+    () =>
+      search.sort === "deal"
+        ? clusters?.find((c) => c.primary.deal_tier === "hot" || c.primary.deal_score != null) ??
+          null
+        : null,
+    [clusters, search.sort],
   );
   const restClusters = useMemo(
     () =>
@@ -343,6 +355,20 @@ export function App() {
               Skryté<em>{hiddenCount}</em>
             </button>
           )}
+          <label className="sortwrap">
+            <span className="sortlbl">Řadit</span>
+            <select
+              className="sortbtn"
+              value={search.sort}
+              onChange={(e) => setSearch((s) => ({ ...s, sort: e.target.value as SortKey }))}
+            >
+              {Object.entries(SORT_LABELS).map(([key, label]) => (
+                <option key={key} value={key}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
 
         {showFilters && (
@@ -601,7 +627,8 @@ function AlsoOn({ duplicates }: { duplicates: Listing[] }) {
 }
 
 function Gauge({ score }: { score: number }) {
-  const p = Math.max(0, Math.min(1, score / 0.3)); // 30 % = plný gauge
+  const idx = dealIndex(score);
+  const p = idx / 100;
   const c = Math.PI * 64;
   const dash = c * p;
   return (
@@ -624,7 +651,7 @@ function Gauge({ score }: { score: number }) {
           style={{ filter: "drop-shadow(0 0 6px rgba(47,227,155,0.6))" }}
         />
       </svg>
-      <div className="val">{Math.round(score * 100)}</div>
+      <div className="val">{idx}</div>
       <div className="unit">deal index</div>
     </div>
   );
@@ -765,7 +792,7 @@ function CarCard({
         </span>
         {listing.deal_score != null && (
           <span className={`card-score tier-${tier}`}>
-            {Math.round(listing.deal_score * 100)}
+            {dealIndex(listing.deal_score)}
           </span>
         )}
       </div>
@@ -814,6 +841,7 @@ function CarCard({
             )
           )}
         </div>
+        <WhyDeal listing={listing} />
         <div className="card-foot">
           <span className="card-src">{sourceLabel(listing.source)}</span>
           {listing.drivetrain && listing.drivetrain !== "fwd" && (
@@ -827,6 +855,34 @@ function CarCard({
         </div>
       </div>
     </article>
+  );
+}
+
+/**
+ * Jednorádkové vysvětlení, PROČ je (nebo není) auto deal. Backend teď počítá
+ * odhad trhu, důvěru i shodu s bazarem — bez tohohle by to zůstalo skryté a
+ * uživatel by musel skóre věřit naslepo.
+ */
+function WhyDeal({ listing }: { listing: Listing }) {
+  if (listing.implausible || listing.expected_price == null) return null;
+  const below = pct(listing.pct_below);
+  if (below == null || below <= 0) return null;
+
+  const conf =
+    listing.confidence >= 0.8 ? "vysoká" : listing.confidence >= 0.55 ? "střední" : "nízká";
+
+  return (
+    <div className="why" title={`Jistota odhadu: ${conf} (podle množství srovnatelných aut)`}>
+      <span className="why-main">
+        −{below} % proti odhadu {czk(listing.expected_price)}
+      </span>
+      <span className={`why-conf why-conf-${conf === "vysoká" ? "hi" : conf === "střední" ? "mid" : "lo"}`}>
+        jistota {conf}
+      </span>
+      {listing.portal_agreement === "agree" && (
+        <span className="why-agree">✓ bazar souhlasí</span>
+      )}
+    </div>
   );
 }
 

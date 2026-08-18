@@ -64,8 +64,8 @@ import logging
 import random
 import re
 import time
-import unicodedata
 
+from app.mobilede_catalog import resolve_ids
 from app.normalize import parse_fuel, parse_power_kw, parse_transmission
 from app.scrapers.base import RawListing, Scraper, SearchQuery, title_matches
 
@@ -125,52 +125,11 @@ _ID_RE = re.compile(r"[?&]id=(\d+)")
 _EZ_RE = re.compile(r"EZ\s*(?:\d{2}/)?((?:19|20)\d{2})")
 _KM_RE = re.compile(r"([\d.]{2,})\s*km", re.IGNORECASE)
 
-# Interni numericka ID mobile.de (z <select name="mk"/"md"> na search formu -
-# viz scripts/mobilede_probe.py). Bez nich fulltext hledani mobile.de tise
-# zahodi (viz docstring vyse) a vrati nefiltrovanou "nejnovejsi auta" stranku.
-# Klice jsou VZDY bez diakritiky (_ascii_upper nize) - "Škoda"/"ŠKODA" i
-# "Skoda" tak mapuji na stejny "SKODA" klic.
-_MAKE_IDS = {
-    "VW": 25200,
-    "VOLKSWAGEN": 25200,
-    "BMW": 3500,
-    "AUDI": 1900,
-    "SKODA": 22900,
-}
-_MODEL_IDS: dict[tuple[str, str], int] = {
-    ("VW", "GOLF"): 14,
-    ("BMW", "130"): 5,
-    ("BMW", "320"): 10,
-    ("AUDI", "S3"): 19,
-    ("SKODA", "OCTAVIA"): 10,
-}
-
-
-def _ascii_upper(text: str) -> str:
-    """'Škoda' -> 'SKODA' (odstrani diakritiku, at se da porovnavat s _MAKE_IDS/_MODEL_IDS)."""
-    norm = unicodedata.normalize("NFKD", text)
-    return "".join(c for c in norm if not unicodedata.combining(c)).upper()
-
-
-def _resolve_ids(make: str | None, model: str | None) -> tuple[int, int] | None:
-    """Prelozi lidske make/model na mobile.de makeId/modelId, pokud ho zname.
-
-    BMW ma modely bez pripony motorizace ("320", ne "320i"/"320d") - orizne
-    pripadna pismena na konci.
-    """
-    if not make or not model:
-        return None
-    make_key = _ascii_upper(make.strip())
-    if make_key == "VOLKSWAGEN":
-        make_key = "VW"
-    make_id = _MAKE_IDS.get(make_key)
-    if make_id is None:
-        return None
-    model_key = re.sub(r"[^A-Z0-9]", "", _ascii_upper(model.strip()))
-    if make_key == "BMW":
-        model_key = re.sub(r"[A-Z]+$", "", model_key)  # "320I"/"320D" -> "320"
-    model_id = _MODEL_IDS.get((make_key, model_key))
-    return (make_id, model_id) if model_id is not None else None
+# Interni numericka ID mobile.de drzi app/mobilede_catalog.py (JSON vedle kodu).
+# Bez spravneho ID mobile.de klic TISE IGNORUJE a vrati nesouvisejici auta
+# (overeno: textove "VW"/"Golf" vratilo Mercedes GLA, Ford Focus, Citroën C4).
+# Nove znacky/modely doplni `python -m scripts.mobilede_catalog_sync`.
+_resolve_ids = resolve_ids
 
 
 MAX_PAGES = 10  # ~24 inzeratu/stranka -> az ~240; dalsi stranky jsou jen navigace

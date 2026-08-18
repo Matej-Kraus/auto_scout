@@ -79,30 +79,50 @@ _EQUIPMENT_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
 # Proto: podezrele inzeraty se NEPOUZIJI pro fit trhu a dostanou tier "none".
 
 _DAMAGE_HINTS = (
+    # DE
     "unfall",
-    "frontschaden",
-    "heckschaden",
-    "motorschaden",
-    "getriebeschaden",
-    "hagelschaden",
+    "schaden",  # pokryje front-/heck-/motor-/getriebe-/hagel-/wasserschaden
     "bastler",
     "schlachtfest",
     "ersatzteil",
     "teilespender",
+    "defekt",
     "export",
+    "bj-teile",
+    # CZ
     "bourane",
     "bourané",
+    "bouraný",
+    "borany",
     "havarovane",
     "havarované",
     "poskozene",
     "poškozené",
+    "poškozeny",
     "na dily",
     "na díly",
     "nepojizdne",
     "nepojízdné",
+    "nepojizdny",
+    "po nehode",
+    "po nehodě",
+    "vrak",
+    "k renovaci",
+    "neni pojizdne",
+    "není pojízdné",
 )
-# "unfallfrei" (= bez nehody) obsahuje "unfall", ale znamena pravy opak.
-_DAMAGE_EXCEPTIONS = ("unfallfrei", "unfallschadenfrei", "kein unfall")
+# Pozor na inzeraty, ktere se vadou CHLUBI opacne: "unfallfrei" (= bez nehody)
+# obsahuje "unfall", "scheckheftgepflegt" neobsahuje schaden, ale "schadenfrei" ano.
+_DAMAGE_EXCEPTIONS = (
+    "unfallfrei",
+    "schadenfrei",
+    "unfallschadenfrei",
+    "kein unfall",
+    "nebourane",
+    "nebourané",
+    "nehavarovane",
+    "nehavarované",
+)
 
 MIN_PLAUSIBLE_KM_PER_YEAR = 700  # pod tim je najezd u starsiho auta nevěrohodný
 MIN_PLAUSIBLE_PRICE_RATIO = 0.35  # pod 35 % medianu skupiny = dily/vrak/preklik

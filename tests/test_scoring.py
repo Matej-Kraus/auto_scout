@@ -134,8 +134,16 @@ def test_outlier_does_not_wreck_market_model():
         ("Golf GTI Motorschaden", "damage"),
         ("Golf GTI Unfallschaden", "damage"),
         ("Golf GTI Bastlerfahrzeug", "damage"),
+        ("Golf GTI Hagelschaden", "damage"),
+        ("Golf GTI Getriebe defekt", "damage"),
         ("Golf GTI na díly", "damage"),
-        ("Golf GTI unfallfrei", None),  # "bez nehody" = pravy opak
+        ("Golf GTI po nehodě", "damage"),
+        ("Golf GTI bouraný", "damage"),
+        ("Golf GTI vrak", "damage"),
+        # inzeraty, ktere se chlubi OPAKEM — nesmi se chytit
+        ("Golf GTI unfallfrei", None),
+        ("Golf GTI schadenfrei", None),
+        ("Golf GTI nebourané", None),
         ("Volkswagen Golf GTI", None),
     ],
 )

@@ -94,8 +94,16 @@ def _to_out(lst: Listing, score) -> ListingOut:
 
 
 @app.get("/api/listings", response_model=list[ListingOut])
-def list_listings(active: bool = True, model: str | None = None) -> list[ListingOut]:
-    """Inzeraty serazene podle deal skore (nejlepsi dealy nahore)."""
+def list_listings(
+    active: bool = True, model: str | None = None, include_junk: bool = False
+) -> list[ListingOut]:
+    """Inzeraty serazene podle deal skore (nejlepsi dealy nahore).
+
+    Bourana auta, vraky na dily a inzeraty s nesmyslnymi udaji se NEVRACI —
+    uzivatele nezajimaji a jen zaclani. Pro diagnostiku jdou zapnout pres
+    `?include_junk=true` (viz scoring/engine.py implausibility_reason).
+    Do odhadu trhu nevstupuji tak jako tak.
+    """
     with SessionLocal() as session:
         stmt = select(Listing)
         if active:
@@ -104,8 +112,14 @@ def list_listings(active: bool = True, model: str | None = None) -> list[Listing
             stmt = stmt.where(Listing.model == model)
         listings = list(session.scalars(stmt).all())
 
+        # Skore se pocita PRED filtrovanim — skupina musi zustat cela, aby
+        # median a rozptyl trhu sedely.
         scores = _score_all(listings)
-        out = [_to_out(lst, scores.get(lst.id)) for lst in listings]
+        out = [
+            _to_out(lst, scores.get(lst.id))
+            for lst in listings
+            if include_junk or getattr(scores.get(lst.id), "implausible", None) is None
+        ]
 
     out.sort(key=lambda x: (x.deal_score if x.deal_score is not None else -1e9), reverse=True)
     return out
@@ -166,9 +180,14 @@ def status() -> StatusOut:
         total = session.scalar(select(func.count(Listing.id))) or 0
 
         # Jak rychle dobre kusy mizi: median dnu first_seen->last_seen u zmizelych.
+        # Pocitame jen inzeraty, ktere jsme realne sledovali aspon den — jednorazove
+        # videne (a hlavne ty deaktivovane uklidem watche) maji zivotnost ~0 a
+        # stahovaly by median k nule, coz metriku delalo bezcennou.
         gone = session.scalars(select(Listing).where(Listing.is_active.is_(False))).all()
         days = sorted(
-            max((lst.last_seen - lst.first_seen).total_seconds() / 86400, 0.0) for lst in gone
+            d
+            for d in ((lst.last_seen - lst.first_seen).total_seconds() / 86400 for lst in gone)
+            if d >= 1.0
         )
         median_days = days[len(days) // 2] if days else None
 

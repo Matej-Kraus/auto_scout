@@ -130,8 +130,8 @@ def test_name_includes_uses_word_boundaries():
         ("BMW", "320d", (3500, 10)),
         ("BMW", "130i", (3500, 5)),
         ("AUDI", "S3", (1900, 19)),
-        ("Ford", "Focus", None),  # nezname → fallback na fulltext
-        ("VW", "Passat", None),
+        ("Tesla", "Model 3", None),  # neznama znacka → fallback na fulltext
+        ("VW", "Passat", None),  # znacku zname, model v katalogu neni
         (None, "Golf", None),
     ],
 )
@@ -154,8 +154,8 @@ def test_url_uses_structured_ids_when_known():
 
 
 def test_url_falls_back_to_fulltext_for_unknown_model():
-    url = _build_url(q(make="Ford", model="Focus", text="Ford Focus ST"))
-    assert "modelDescription.modelDescription=Ford+Focus+ST" in url
+    url = _build_url(q(make="Tesla", model="Model 3", text="Tesla Model 3"))
+    assert "modelDescription.modelDescription=Tesla+Model+3" in url
     assert "makeModelVariant1" not in url
 
 
